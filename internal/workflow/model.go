@@ -144,6 +144,17 @@ func (w *Workflow) TableName() string {
 
 // 执行实例
 type WorkflowExecution struct {
+	ID         uint       `json:"id" gorm:"primaryKey"`
+	WorkflowID uint       `json:"workflow_id" gorm:"index;not null"`
+	Status     ExecStatus `json:"status" gorm:"size:20;default:pending"`
+	Input      JSON       `json:"input" gorm:"type:json"`
+	Output     JSON       `json:"output" gorm:"type:json"`
+	Context    JSON       `json:"context" gorm:"type:json"`
+	NodeStates NodeStates `json:"node_states" gorm:"type:json"`
+	Error      string     `json:"error" gorm:"type:text"`
+	StartedAt  *time.Time `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at"`
+	CreatedAt  time.Time  `json:"created_at"`
 }
 
 // 节点
