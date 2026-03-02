@@ -151,3 +151,7 @@ POST http://localhost:8080/api/v1/workflows/2/execute
 Content-Type: application/json
 
 {}
+
+### SSE 流式执行工作流
+GET http://localhost:8080/api/v1/workflows/1/execute/stream
+Accept: text/event-stream

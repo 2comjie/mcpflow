@@ -42,9 +42,11 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, ev
 
 	if err != nil {
 		// 执行完发结束事件
-		eventBus.Emit(Event{Type: EventFlowFailed, Error: err.Error()})
-		eventBus.Close()
-		return nil, nodeStates, err
+		if eventBus != nil {
+			eventBus.Emit(Event{Type: EventFlowFailed, Error: err.Error()})
+			eventBus.Close()
+			return nil, nodeStates, err
+		}
 	}
 
 	// 找到 end 节点 作为输出结果
@@ -57,8 +59,10 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, ev
 			break
 		}
 	}
-	eventBus.Emit(Event{Type: EventFlowCompleted, Output: output})
-	eventBus.Close()
+	if eventBus != nil {
+		eventBus.Emit(Event{Type: EventFlowCompleted, Output: output})
+		eventBus.Close()
+	}
 
 	return output, nodeStates, nil
 }

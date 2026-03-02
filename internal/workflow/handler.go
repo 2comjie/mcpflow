@@ -25,6 +25,7 @@ func (h *WorkflowHandler) RegisterRoutes(r *gin.RouterGroup) {
 		wf.PUT("/:id", h.Update)
 		wf.DELETE("/:id", h.Delete)
 		wf.POST("/:id/execute", h.Execute)
+		wf.GET("/:id/execute/stream", h.ExecuteStream)
 	}
 
 	exec := r.Group("/executions")
@@ -138,4 +139,36 @@ func (h *WorkflowHandler) GetExecution(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, exec)
+}
+
+// SSE 流式执行
+func (h *WorkflowHandler) ExecuteStream(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var input map[string]any
+	if err := c.ShouldBindJSON(&input); err != nil {
+		input = make(map[string]any)
+	}
+
+	exec, eventBus, err := h.svc.ExecuteWithEvents(c.Request.Context(), uint(id), input)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+
+	c.SSEvent("started", gin.H{"execution_id": exec.ID})
+	c.Writer.Flush()
+
+	for event := range eventBus.Events() {
+		c.SSEvent(string(event.Type), event)
+		c.Writer.Flush()
+	}
 }

@@ -68,7 +68,7 @@ func (s *WorkflowService) Execute(ctx context.Context, workflowID uint, input ma
 	}
 
 	// 执行DAG
-	output, nodeStates, runErr := s.engine.Run(ctx, wf, input)
+	output, nodeStates, runErr := s.engine.Run(ctx, wf, input, nil)
 
 	// 更新执行结果
 	finished := time.Now()
@@ -127,4 +127,44 @@ func validateWorkflow(wf *Workflow) error {
 	}
 
 	return nil
+}
+
+// 异步执行工作流，返回事件流
+func (s *WorkflowService) ExecuteWithEvents(ctx context.Context, workflowID uint, input map[string]any) (*WorkflowExecution, *EventBus, error) {
+	wf, err := s.GetByID(ctx, workflowID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("workflow not found: %w", err)
+	}
+
+	now := time.Now()
+	exec := &WorkflowExecution{
+		WorkflowID: wf.ID,
+		Status:     ExecRunning,
+		Input:      JSON(input),
+		StartedAt:  &now,
+	}
+	if err := s.repo.CreateExecution(ctx, exec); err != nil {
+		return nil, nil, err
+	}
+
+	eventBus := NewEventBus()
+
+	// 异步执行
+	go func() {
+		output, nodeStates, runErr := s.engine.Run(ctx, wf, input, eventBus)
+
+		finished := time.Now()
+		exec.FinishedAt = &finished
+		exec.NodeStates = nodeStates
+		if runErr != nil {
+			exec.Status = ExecFailed
+			exec.Error = runErr.Error()
+		} else {
+			exec.Status = ExecCompleted
+			exec.Output = output
+		}
+		s.repo.UpdateExecution(ctx, exec)
+	}()
+
+	return exec, eventBus, nil
 }
