@@ -41,12 +41,11 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, ev
 	err := e.executeNode(ctx, graph, startID, input, nodeStates, nodeOutputs, eventBus)
 
 	if err != nil {
-		// 执行完发结束事件
 		if eventBus != nil {
 			eventBus.Emit(Event{Type: EventFlowFailed, Error: err.Error()})
 			eventBus.Close()
-			return nil, nodeStates, err
 		}
+		return nil, nodeStates, err
 	}
 
 	// 找到 end 节点 作为输出结果

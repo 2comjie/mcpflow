@@ -42,7 +42,7 @@ func (b *EventBus) Emit(e Event) {
 	case b.ch <- e:
 	default:
 		// channel 满了就丢弃，避免阻塞引擎
-		log.Fatalf("event bus full")
+		log.Printf("event bus full, dropping event: %s", e.Type)
 	}
 }
 
