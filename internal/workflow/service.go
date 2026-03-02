@@ -124,21 +124,21 @@ func validateWorkflow(wf *Workflow) error {
 		return fmt.Errorf("workflow name is required")
 	}
 
-	// 检查必须有 start 和 end 节点
-	hasStart, hasEnd := false, false
+	// 检查必须有且只有一个 start 和一个 end 节点
+	startCount, endCount := 0, 0
 	for _, n := range wf.Nodes {
 		if n.Type == NodeStart {
-			hasStart = true
+			startCount++
 		}
 		if n.Type == NodeEnd {
-			hasEnd = true
+			endCount++
 		}
 	}
-	if !hasStart {
-		return fmt.Errorf("workflow must have a start node")
+	if startCount != 1 {
+		return fmt.Errorf("workflow must have exactly one start node")
 	}
-	if !hasEnd {
-		return fmt.Errorf("workflow must have an end node")
+	if endCount != 1 {
+		return fmt.Errorf("workflow must have exactly one end node")
 	}
 
 	return nil

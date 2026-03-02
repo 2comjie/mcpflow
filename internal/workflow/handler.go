@@ -26,6 +26,7 @@ func (h *WorkflowHandler) RegisterRoutes(r *gin.RouterGroup) {
 		wf.DELETE("/:id", h.Delete)
 		wf.POST("/:id/execute", h.Execute)
 		wf.GET("/:id/execute/stream", h.ExecuteStream)
+		wf.GET("/:id/executions", h.ListExecutions)
 	}
 
 	exec := r.Group("/executions")
@@ -187,6 +188,23 @@ func (h *WorkflowHandler) GetExecutionLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": logs})
+}
+
+func (h *WorkflowHandler) ListExecutions(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	executions, total, err := h.svc.ListExecutions(c.Request.Context(), uint(id), page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": executions, "total": total})
 }
 
 func (h *WorkflowHandler) CancelExecution(c *gin.Context) {

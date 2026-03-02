@@ -162,6 +162,16 @@ export default function WorkflowEditor() {
   )
 
   const onAddNode = (type: string, label: string, color: string) => {
+    // Start 和 End 节点只能各有一个
+    if (type === 'start' && nodes.some((n) => (n.data as any).nodeType === 'start')) {
+      message.warning('Only one Start node is allowed')
+      return
+    }
+    if (type === 'end' && nodes.some((n) => (n.data as any).nodeType === 'end')) {
+      message.warning('Only one End node is allowed')
+      return
+    }
+
     const newNode: FlowNode = {
       id: getId(),
       type: 'default',
@@ -410,23 +420,36 @@ export default function WorkflowEditor() {
 
                 {(selectedNode.data as any).nodeType === 'llm' && (
                   <>
-                    <Form.Item label="Provider">
-                      <Select
-                        value={(selectedNode.data as any).config?.llm?.provider}
-                        onChange={(v) => updateNodeConfig('llm.provider', v)}
-                        options={[
-                          { value: 'openai', label: 'OpenAI' },
-                          { value: 'anthropic', label: 'Anthropic' },
-                        ]}
-                        placeholder="Select provider"
-                        style={{ borderRadius: 8 }}
+                    <Form.Item label="Base URL">
+                      <Input
+                        value={(selectedNode.data as any).config?.llm?.base_url}
+                        onChange={(e) => updateNodeConfig('llm.base_url', e.target.value)}
+                        placeholder="{{secret.deepseek_url}}"
+                        style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="API Key">
+                      <Input
+                        value={(selectedNode.data as any).config?.llm?.api_key}
+                        onChange={(e) => updateNodeConfig('llm.api_key', e.target.value)}
+                        placeholder="{{secret.deepseek_key}}"
+                        style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
                       />
                     </Form.Item>
                     <Form.Item label="Model">
                       <Input
                         value={(selectedNode.data as any).config?.llm?.model}
                         onChange={(e) => updateNodeConfig('llm.model', e.target.value)}
-                        placeholder="gpt-4o"
+                        placeholder="deepseek-chat"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="System Message">
+                      <Input.TextArea
+                        value={(selectedNode.data as any).config?.llm?.system_msg}
+                        onChange={(e) => updateNodeConfig('llm.system_msg', e.target.value)}
+                        rows={2}
+                        placeholder="Optional system message"
                         style={{ borderRadius: 8 }}
                       />
                     </Form.Item>
@@ -435,7 +458,7 @@ export default function WorkflowEditor() {
                         value={(selectedNode.data as any).config?.llm?.prompt}
                         onChange={(e) => updateNodeConfig('llm.prompt', e.target.value)}
                         rows={3}
-                        placeholder="Enter prompt..."
+                        placeholder="Supports {{input.xxx}} {{secret.xxx}}"
                         style={{ borderRadius: 8 }}
                       />
                     </Form.Item>

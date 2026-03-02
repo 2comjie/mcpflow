@@ -5,6 +5,7 @@ import {
   HomeOutlined,
   ApartmentOutlined,
   CloudServerOutlined,
+  LockOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
 } from '@ant-design/icons'
@@ -15,6 +16,7 @@ const menuItems = [
   { key: '/', icon: <HomeOutlined />, label: 'Home' },
   { key: '/workflows', icon: <ApartmentOutlined />, label: 'Workflows' },
   { key: '/mcp-servers', icon: <CloudServerOutlined />, label: 'MCP Servers' },
+  { key: '/secrets', icon: <LockOutlined />, label: 'Secrets' },
 ]
 
 export default function MainLayout() {
@@ -23,6 +25,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
 
   const getSelectedKey = () => {
+    if (location.pathname.startsWith('/secrets')) return '/secrets'
     if (location.pathname.startsWith('/mcp-servers')) return '/mcp-servers'
     if (location.pathname.startsWith('/workflows')) return '/workflows'
     return '/'

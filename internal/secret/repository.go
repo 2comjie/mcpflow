@@ -24,7 +24,7 @@ func (r *Repository) Create(ctx context.Context, s *Secret) error {
 
 func (r *Repository) List(ctx context.Context) ([]Secret, error) {
 	var secrets []Secret
-	err := r.db.WithContext(ctx).Order("key ASC").Find(&secrets).Error
+	err := r.db.WithContext(ctx).Order("`key` ASC").Find(&secrets).Error
 	return secrets, err
 }
 
