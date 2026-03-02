@@ -16,7 +16,7 @@ func NewWorkflowRepository(db *gorm.DB) *WorkflowRepository {
 
 func (r *WorkflowRepository) AutoMigrate() error {
 	// 自动建表
-	return r.db.AutoMigrate(&Workflow{}, &WorkflowExecution{})
+	return r.db.AutoMigrate(&Workflow{}, &WorkflowExecution{}, &ExecutionLog{})
 }
 
 // ==================== Workflow CRUD ====================
@@ -86,4 +86,16 @@ func (r *WorkflowRepository) ListExecutions(ctx context.Context, workflowID uint
 		return nil, 0, err
 	}
 	return executions, total, nil
+}
+
+// ==================== ExecutionLog ====================
+
+func (r *WorkflowRepository) CreateLog(ctx context.Context, log *ExecutionLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *WorkflowRepository) ListLogs(ctx context.Context, executionID uint) ([]ExecutionLog, error) {
+	var logs []ExecutionLog
+	err := r.db.WithContext(ctx).Where("execution_id = ?", executionID).Order("id ASC").Find(&logs).Error
+	return logs, err
 }

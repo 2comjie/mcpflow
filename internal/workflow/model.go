@@ -141,12 +141,18 @@ type WorkflowExecution struct {
 
 // 节点
 type Node struct {
-	ID       string     `json:"id"`
-	Type     NodeType   `json:"type"`
-	Name     string     `json:"name"`
-	Config   NodeConfig `json:"config"`
-	Position Position   `json:"position"`
-	Timeout  int        `json:"timeout,omitempty"` // 秒，0 表示用默认值
+	ID       string       `json:"id"`
+	Type     NodeType     `json:"type"`
+	Name     string       `json:"name"`
+	Config   NodeConfig   `json:"config"`
+	Position Position     `json:"position"`
+	Timeout  int          `json:"timeout,omitempty"`
+	Retry    *RetryConfig `json:"retry,omitempty"`
+}
+
+type RetryConfig struct {
+	MaxRetries int `json:"max_retries"` // 最大重试次数，默认 0 不重试
+	Interval   int `json:"interval"`    // 重试间隔，秒，默认 1
 }
 
 type Edge struct {
@@ -228,6 +234,24 @@ type HTTPConfig struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body,omitempty"`
+}
+
+// ==================== 执行日志 ====================
+
+// ExecutionLog 记录每个节点每次执行的详细信息
+type ExecutionLog struct {
+	ID          uint      `json:"id" gorm:"primaryKey"`
+	ExecutionID uint      `json:"execution_id" gorm:"index;not null"`
+	NodeID      string    `json:"node_id" gorm:"size:100;not null"`
+	NodeName    string    `json:"node_name" gorm:"size:255"`
+	NodeType    NodeType  `json:"node_type" gorm:"size:50"`
+	Attempt     int       `json:"attempt"`                 // 第几次尝试，从 1 开始
+	Status      string    `json:"status" gorm:"size:20"`   // completed/failed
+	Input       JSON      `json:"input" gorm:"type:json"`
+	Output      JSON      `json:"output" gorm:"type:json"`
+	Error       string    `json:"error" gorm:"type:text"`
+	Duration    int64     `json:"duration"`                // 毫秒
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // ==================== 执行状态 ====================

@@ -75,7 +75,11 @@ func (s *WorkflowService) Execute(ctx context.Context, workflowID uint, input ma
 	defer s.cancels.Delete(exec.ID)
 
 	// 执行DAG
-	output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, nil)
+	logFn := func(l *ExecutionLog) {
+		l.ExecutionID = exec.ID
+		s.repo.CreateLog(ctx, l)
+	}
+	output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, nil, logFn)
 
 	// 更新执行结果
 	finished := time.Now()
@@ -107,6 +111,10 @@ func (s *WorkflowService) ListExecutions(ctx context.Context, workflowID uint, p
 		offset = 0
 	}
 	return s.repo.ListExecutions(ctx, workflowID, offset, pageSize)
+}
+
+func (s *WorkflowService) GetExecutionLogs(ctx context.Context, executionID uint) ([]ExecutionLog, error) {
+	return s.repo.ListLogs(ctx, executionID)
 }
 
 // ==================== 校验 ====================
@@ -159,10 +167,15 @@ func (s *WorkflowService) ExecuteWithEvents(ctx context.Context, workflowID uint
 	runCtx, cancel := context.WithCancel(ctx)
 	s.cancels.Store(exec.ID, cancel)
 
+	logFn := func(l *ExecutionLog) {
+		l.ExecutionID = exec.ID
+		s.repo.CreateLog(ctx, l)
+	}
+
 	// 异步执行
 	go func() {
 		defer s.cancels.Delete(exec.ID)
-		output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, eventBus)
+		output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, eventBus, logFn)
 
 		finished := time.Now()
 		exec.FinishedAt = &finished

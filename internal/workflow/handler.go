@@ -32,6 +32,7 @@ func (h *WorkflowHandler) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		exec.GET("/:id", h.GetExecution)
 		exec.POST("/:id/cancel", h.CancelExecution)
+		exec.GET("/:id/logs", h.GetExecutionLogs)
 	}
 }
 
@@ -172,6 +173,20 @@ func (h *WorkflowHandler) ExecuteStream(c *gin.Context) {
 		c.SSEvent(string(event.Type), event)
 		c.Writer.Flush()
 	}
+}
+
+func (h *WorkflowHandler) GetExecutionLogs(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	logs, err := h.svc.GetExecutionLogs(c.Request.Context(), uint(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": logs})
 }
 
 func (h *WorkflowHandler) CancelExecution(c *gin.Context) {

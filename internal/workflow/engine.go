@@ -6,6 +6,9 @@ import (
 	"time"
 )
 
+// LogFunc 日志回调函数
+type LogFunc func(log *ExecutionLog)
+
 // DAG 工作流执行引擎
 type Engine struct {
 	registry *ExecutorRegistry
@@ -18,7 +21,7 @@ func NewEngine(registry *ExecutorRegistry) *Engine {
 	return en
 }
 
-func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, eventBus *EventBus) (map[string]any, map[string]NodeState, error) {
+func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, eventBus *EventBus, logFn LogFunc) (map[string]any, map[string]NodeState, error) {
 	graph := buildGraph(wf)
 	nodeStates := make(map[string]NodeState)
 	nodeOutputs := make(map[string]map[string]any)
@@ -38,7 +41,7 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, ev
 		return nil, nil, fmt.Errorf("workflow has no start node")
 	}
 
-	err := e.executeNode(ctx, graph, startID, input, nodeStates, nodeOutputs, eventBus)
+	err := e.executeNode(ctx, graph, startID, input, nodeStates, nodeOutputs, eventBus, logFn)
 
 	if err != nil {
 		if eventBus != nil {
@@ -74,6 +77,7 @@ func (e *Engine) executeNode(
 	nodeStates map[string]NodeState,
 	nodeOutputs map[string]map[string]any,
 	eventBus *EventBus,
+	logFn LogFunc,
 ) error {
 	if _, done := nodeStates[nodeID]; done {
 		return nil
@@ -103,14 +107,62 @@ func (e *Engine) executeNode(
 		})
 	}
 
-	execCtx := ctx
+	// 重试配置
+	maxRetries := 0
+	retryInterval := time.Second
+	if node.Retry != nil {
+		maxRetries = node.Retry.MaxRetries
+		if node.Retry.Interval > 0 {
+			retryInterval = time.Duration(node.Retry.Interval) * time.Second
+		}
+	}
+
+	// 超时配置
 	timeout := node.Timeout
 	if timeout <= 0 {
-		timeout = 60 // 默认 60 秒
+		timeout = 60
 	}
-	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
-	defer cancel()
-	output, err := executor.Execute(execCtx, node, renderedInput)
+
+	var output map[string]any
+	var err error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+		attemptStart := time.Now()
+		output, err = executor.Execute(execCtx, node, renderedInput)
+		cancel()
+		attemptDuration := time.Since(attemptStart).Milliseconds()
+
+		// 写执行日志
+		if logFn != nil {
+			l := &ExecutionLog{
+				NodeID:   nodeID,
+				NodeName: node.Name,
+				NodeType: node.Type,
+				Attempt:  attempt + 1,
+				Input:    renderedInput,
+				Duration: attemptDuration,
+			}
+			if err != nil {
+				l.Status = string(ExecFailed)
+				l.Error = err.Error()
+			} else {
+				l.Status = string(ExecCompleted)
+				l.Output = output
+			}
+			logFn(l)
+		}
+
+		if err == nil {
+			break
+		}
+		if attempt < maxRetries {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(retryInterval):
+			}
+		}
+	}
 
 	duration := time.Since(start).Milliseconds()
 	if err != nil {
@@ -121,7 +173,14 @@ func (e *Engine) executeNode(
 			Error:    err.Error(),
 			Duration: duration,
 		}
-		return fmt.Errorf("node %s(%s) failed: %w", node.Name, nodeID, err)
+		if eventBus != nil {
+			eventBus.Emit(Event{
+				Type: EventNodeFailed, NodeID: nodeID,
+				NodeName: node.Name, NodeType: node.Type,
+				Error: err.Error(), Duration: duration,
+			})
+		}
+		return fmt.Errorf("node %s(%s) failed %w", node.Name, nodeID, err)
 	}
 
 	nodeStates[nodeID] = NodeState{
@@ -145,7 +204,7 @@ func (e *Engine) executeNode(
 	nextIDs := e.resolveNext(node, output, graph)
 
 	for _, nextID := range nextIDs {
-		if err := e.executeNode(ctx, graph, nextID, output, nodeStates, nodeOutputs, eventBus); err != nil {
+		if err := e.executeNode(ctx, graph, nextID, output, nodeStates, nodeOutputs, eventBus, logFn); err != nil {
 			return err
 		}
 	}

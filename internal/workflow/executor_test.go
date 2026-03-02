@@ -142,7 +142,7 @@ func TestEngine_SimpleFlow(t *testing.T) {
 		},
 	}
 
-	output, states, err := engine.Run(context.Background(), wf, map[string]any{"msg": "hello"}, nil)
+	output, states, err := engine.Run(context.Background(), wf, map[string]any{"msg": "hello"}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -180,7 +180,7 @@ func TestEngine_ConditionBranch(t *testing.T) {
 	}
 
 	// score=80 走 true 分支
-	output, states, err := engine.Run(context.Background(), wf, map[string]any{"score": 80}, nil)
+	output, states, err := engine.Run(context.Background(), wf, map[string]any{"score": 80}, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error %v", err)
 	}
@@ -355,7 +355,7 @@ func TestEngine_NoStartNode(t *testing.T) {
 	wf := &Workflow{
 		Nodes: Nodes{{ID: "e", Type: NodeEnd, Name: "结束"}},
 	}
-	_, _, err := engine.Run(context.Background(), wf, nil, nil)
+	_, _, err := engine.Run(context.Background(), wf, nil, nil, nil)
 	if err == nil {
 		t.Fatal("expected error for no start node")
 	}
