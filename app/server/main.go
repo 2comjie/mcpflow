@@ -8,6 +8,7 @@ import (
 	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/internal/mcpserver"
+	"github.com/2comjie/mcpflow/internal/secret"
 	"github.com/2comjie/mcpflow/internal/workflow"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
@@ -42,9 +43,17 @@ func main() {
 	// 初始化 LLM Client
 	llmClient := llm.NewClient(cfg.LLM.BaseURL, cfg.LLM.APIKey)
 
+	// 初始化 secret 模块
+	secretRepo := secret.NewRepository(db)
+	if err := secretRepo.AutoMigrate(); err != nil {
+		log.Fatalf("failed to migrate secret %v", err)
+	}
+	secretHandler := secret.NewHandler(secretRepo)
+
 	// 传入 registry
 	registry := workflow.NewExecutorRegistry(llmClient)
 	engine := workflow.NewEngine(registry)
+	engine.SetSecretStore(secretRepo)
 	svc := workflow.NewWorkflowService(repo, engine)
 	handler := workflow.NewWorkflowHandler(svc)
 
@@ -55,6 +64,8 @@ func main() {
 
 	mcpHandler := mcpserver.NewHandler(mcpSvc)
 	mcpHandler.RegisterRoutes(api)
+
+	secretHandler.RegisterRoutes(api)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("server starting on %s", addr)

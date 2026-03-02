@@ -9,9 +9,15 @@ import (
 // LogFunc 日志回调函数
 type LogFunc func(log *ExecutionLog)
 
+// SecretStore 全局密钥存储接口
+type SecretStore interface {
+	GetAll(ctx context.Context) (map[string]any, error)
+}
+
 // DAG 工作流执行引擎
 type Engine struct {
-	registry *ExecutorRegistry
+	registry    *ExecutorRegistry
+	secretStore SecretStore
 }
 
 func NewEngine(registry *ExecutorRegistry) *Engine {
@@ -21,6 +27,10 @@ func NewEngine(registry *ExecutorRegistry) *Engine {
 	return en
 }
 
+func (e *Engine) SetSecretStore(store SecretStore) {
+	e.secretStore = store
+}
+
 func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, eventBus *EventBus, logFn LogFunc) (map[string]any, map[string]NodeState, error) {
 	graph := buildGraph(wf)
 	nodeStates := make(map[string]NodeState)
@@ -28,6 +38,17 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, ev
 
 	// 存储工作流输入，供模板用 {{input.xxx}} 引用
 	nodeOutputs["__input__"] = input
+
+	// 存储工作流变量，供模板用 {{var.xxx}} 引用
+	if wf.Variables != nil {
+		nodeOutputs["var"] = wf.Variables
+	}
+	// 存储全局密钥，供模板用 {{secret.xxx}} 引用
+	if e.secretStore != nil {
+		if secrets, err := e.secretStore.GetAll(ctx); err == nil {
+			nodeOutputs["secret"] = secrets
+		}
+	}
 
 	// 从开始节点开始
 	startID := ""
