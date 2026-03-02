@@ -7,6 +7,7 @@ import WorkflowEditor from './pages/workflow/WorkflowEditor'
 import MCPServerList from './pages/mcpserver/MCPServerList'
 import SecretList from './pages/secret/SecretList'
 import ExecutionList from './pages/execution/ExecutionList'
+import AllExecutions from './pages/execution/AllExecutions'
 
 const theme = {
   token: {
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/workflows" element={<WorkflowList />} />
             <Route path="/workflows/:id/executions" element={<ExecutionList />} />
+            <Route path="/executions" element={<AllExecutions />} />
             <Route path="/mcp-servers" element={<MCPServerList />} />
             <Route path="/secrets" element={<SecretList />} />
           </Route>

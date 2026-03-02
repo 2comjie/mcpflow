@@ -10,6 +10,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
+  UnorderedListOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { workflowApi, type Workflow } from '../../api/workflow'
@@ -189,6 +190,15 @@ export default function WorkflowList() {
                           onClick: (e) => {
                             e.domEvent.stopPropagation()
                             handleExecute(w.id)
+                          },
+                        },
+                        {
+                          key: 'executions',
+                          icon: <UnorderedListOutlined />,
+                          label: 'Executions',
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            navigate(`/workflows/${w.id}/executions`)
                           },
                         },
                         { type: 'divider' },

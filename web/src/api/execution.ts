@@ -38,6 +38,8 @@ export interface ExecutionLog {
 }
 
 export const executionApi = {
+  list: (page = 1, pageSize = 20) =>
+    request.get('/executions', { params: { page, page_size: pageSize } }),
   get: (id: number) => request.get(`/executions/${id}`),
   logs: (id: number) => request.get(`/executions/${id}/logs`),
   cancel: (id: number) => request.post(`/executions/${id}/cancel`),

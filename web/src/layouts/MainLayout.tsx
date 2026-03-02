@@ -8,6 +8,7 @@ import {
   LockOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons'
 
 const { Content, Sider } = Layout
@@ -15,6 +16,7 @@ const { Content, Sider } = Layout
 const menuItems = [
   { key: '/', icon: <HomeOutlined />, label: 'Home' },
   { key: '/workflows', icon: <ApartmentOutlined />, label: 'Workflows' },
+  { key: '/executions', icon: <ThunderboltOutlined />, label: 'Executions' },
   { key: '/mcp-servers', icon: <CloudServerOutlined />, label: 'MCP Servers' },
   { key: '/secrets', icon: <LockOutlined />, label: 'Secrets' },
 ]
@@ -27,6 +29,7 @@ export default function MainLayout() {
   const getSelectedKey = () => {
     if (location.pathname.startsWith('/secrets')) return '/secrets'
     if (location.pathname.startsWith('/mcp-servers')) return '/mcp-servers'
+    if (location.pathname === '/executions') return '/executions'
     if (location.pathname.startsWith('/workflows')) return '/workflows'
     return '/'
   }
