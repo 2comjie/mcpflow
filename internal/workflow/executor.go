@@ -3,6 +3,8 @@ package workflow
 import (
 	"context"
 	"fmt"
+
+	"github.com/2comjie/mcpflow/internal/mcp"
 )
 
 // 执行器
@@ -16,15 +18,16 @@ type ExecutorRegistry struct {
 }
 
 func NewExecutorRegistry() *ExecutorRegistry {
+	mcpClient := mcp.NewClient()
+
 	r := &ExecutorRegistry{
 		executors: make(map[NodeType]NodeExecutor),
 	}
-	// 注册内置执行器
 	r.Register(NodeStart, &StartExecutor{})
 	r.Register(NodeEnd, &EndExecutor{})
-	r.Register(NodeMCPTool, &MCPToolExecutor{})
-	r.Register(NodeMCPPrompt, &MCPPromptExecutor{})
-	r.Register(NodeMCPResource, &MCPResourceExecutor{})
+	r.Register(NodeMCPTool, &MCPToolExecutor{client: mcpClient})
+	r.Register(NodeMCPPrompt, &MCPPromptExecutor{client: mcpClient})
+	r.Register(NodeMCPResource, &MCPResourceExecutor{client: mcpClient})
 	r.Register(NodeLLM, &LLMExecutor{})
 	r.Register(NodeCondition, &ConditionExecutor{})
 	r.Register(NodeCode, &CodeExecutor{})
@@ -52,7 +55,8 @@ func (e *StartExecutor) Execute(ctx context.Context, node *Node, input map[strin
 	return input, nil
 }
 
-type EndExecutor struct{}
+type EndExecutor struct {
+}
 
 func (e *EndExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	return input, nil
@@ -60,41 +64,38 @@ func (e *EndExecutor) Execute(ctx context.Context, node *Node, input map[string]
 
 // ==================== MCP 节点 ====================
 
-type MCPToolExecutor struct{}
+type MCPToolExecutor struct {
+	client *mcp.Client
+}
 
 func (e *MCPToolExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.MCPTool
 	if cfg == nil {
 		return nil, fmt.Errorf("mcp_tool config is nil")
 	}
-	// TODO 调用mcp server 的 tools/call
-	return map[string]any{
-		"tool":   cfg.ToolName,
-		"result": "TODO: call mcp server",
-	}, nil
+	// 调用mcp server 的 tools/call
+	return e.client.CallTool(ctx, cfg.ServerURL, cfg.ToolName, cfg.Arguments)
 }
 
-type MCPPromptExecutor struct{}
+type MCPPromptExecutor struct {
+	client *mcp.Client
+}
 
 func (e *MCPPromptExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.MCPPrompt
 	if cfg == nil {
 		return nil, fmt.Errorf("mcp_prompt config is nil")
 	}
-	// TODO: 调用 MCP Server 的 prompts/get
-	return map[string]any{
-		"prompt": cfg.PromptName,
-		"result": "TODO: call mcp server",
-	}, nil
+	return e.client.GetPrompt(ctx, cfg.ServerURL, cfg.PromptName, cfg.Arguments)
 }
 
-type MCPResourceExecutor struct{}
+type MCPResourceExecutor struct {
+	client *mcp.Client
+}
 
 func (e *MCPResourceExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
-	// TODO: 调用 MCP Server 的 resources/read
-	return map[string]any{
-		"result": "TODO: call mcp server",
-	}, nil
+	// TODO: 从 node config 中获取 resource URI
+	return nil, fmt.Errorf("mcp_resource not yet configured")
 }
 
 // ==================== LLM ====================
