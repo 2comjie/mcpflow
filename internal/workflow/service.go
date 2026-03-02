@@ -113,6 +113,14 @@ func (s *WorkflowService) ListExecutions(ctx context.Context, workflowID uint, p
 	return s.repo.ListExecutions(ctx, workflowID, offset, pageSize)
 }
 
+func (s *WorkflowService) ListAllExecutions(ctx context.Context, page, pageSize int) ([]WorkflowExecution, int64, error) {
+	offset := (page - 1) * pageSize
+	if offset < 0 {
+		offset = 0
+	}
+	return s.repo.ListAllExecutions(ctx, offset, pageSize)
+}
+
 func (s *WorkflowService) GetExecutionLogs(ctx context.Context, executionID uint) ([]ExecutionLog, error) {
 	return s.repo.ListLogs(ctx, executionID)
 }

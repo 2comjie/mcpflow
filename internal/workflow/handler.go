@@ -31,6 +31,7 @@ func (h *WorkflowHandler) RegisterRoutes(r *gin.RouterGroup) {
 
 	exec := r.Group("/executions")
 	{
+		exec.GET("", h.ListAllExecutions)
 		exec.GET("/:id", h.GetExecution)
 		exec.POST("/:id/cancel", h.CancelExecution)
 		exec.GET("/:id/logs", h.GetExecutionLogs)
@@ -200,6 +201,18 @@ func (h *WorkflowHandler) ListExecutions(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
 	executions, total, err := h.svc.ListExecutions(c.Request.Context(), uint(id), page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": executions, "total": total})
+}
+
+func (h *WorkflowHandler) ListAllExecutions(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	executions, total, err := h.svc.ListAllExecutions(c.Request.Context(), page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -90,6 +90,20 @@ func (r *WorkflowRepository) ListExecutions(ctx context.Context, workflowID uint
 	return executions, total, nil
 }
 
+func (r *WorkflowRepository) ListAllExecutions(ctx context.Context, offset, limit int) ([]WorkflowExecution, int64, error) {
+	var executions []WorkflowExecution
+	var total int64
+
+	db := r.db.WithContext(ctx).Model(&WorkflowExecution{})
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	if err := db.Offset(offset).Limit(limit).Order("id DESC").Find(&executions).Error; err != nil {
+		return nil, 0, err
+	}
+	return executions, total, nil
+}
+
 // ==================== ExecutionLog ====================
 
 func (r *WorkflowRepository) CreateLog(ctx context.Context, log *ExecutionLog) error {
