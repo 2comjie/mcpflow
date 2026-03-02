@@ -3,6 +3,7 @@ module github.com/2comjie/mcpflow
 go 1.25.0
 
 require (
+	github.com/expr-lang/expr v1.17.8
 	github.com/gin-gonic/gin v1.12.0
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/driver/mysql v1.6.0

@@ -12,6 +12,7 @@ import (
 	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/pkg/httpx"
+	"github.com/expr-lang/expr"
 )
 
 // 执行器
@@ -122,7 +123,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, node *Node, input map[string]
 		return nil, fmt.Errorf("llm config is nil")
 	}
 
-	messages := []llm.Message{}
+	var messages []llm.Message
 	if cfg.SystemMsg != "" {
 		messages = append(messages, llm.Message{Role: "system", Content: cfg.SystemMsg})
 	}
@@ -159,11 +160,18 @@ func (e *ConditionExecutor) Execute(ctx context.Context, node *Node, input map[s
 	if cfg == nil {
 		return nil, fmt.Errorf("condition config is nil")
 	}
-	// TODO: 解析表达式，计算结果
-	// 返回 branch 字段，引擎根据它选择下游
-	return map[string]any{
-		"branch": "true",
-	}, nil
+
+	output, err := expr.Eval(cfg.Expression, input)
+	if err != nil {
+		return nil, fmt.Errorf("eval expression %w", err)
+	}
+
+	branch := "false"
+	if b, ok := output.(bool); ok && b {
+		branch = "true"
+	}
+
+	return map[string]any{"branch": branch}, nil
 }
 
 // ==================== Code ====================
