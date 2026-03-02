@@ -115,13 +115,50 @@ export default function WorkflowEditor() {
     }
   }, [id])
 
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      const sourceNode = nodes.find((n) => n.id === connection.source)
+      const targetNode = nodes.find((n) => n.id === connection.target)
+      if (!sourceNode || !targetNode) return false
+
+      const sourceType = (sourceNode.data as any).nodeType
+      const targetType = (targetNode.data as any).nodeType
+
+      // 不能自连
+      if (connection.source === connection.target) return false
+      // End 不能有出边
+      if (sourceType === 'end') return false
+      // Start 不能有入边
+      if (targetType === 'start') return false
+
+      // 出度校验
+      const outCount = edges.filter((e) => e.source === connection.source).length
+      if (sourceType === 'condition' && outCount >= 2) return false
+      if (sourceType !== 'condition' && outCount >= 1) return false
+
+      return true
+    },
+    [nodes, edges],
+  )
+
   const onConnect = useCallback(
     (params: Connection) => {
-      setEdges((eds) =>
-        addEdge({ ...params, animated: true, style: { stroke: '#98a2b3', strokeWidth: 2 } }, eds),
-      )
+      const sourceNode = nodes.find((n) => n.id === params.source)
+      if (!sourceNode) return
+
+      const sourceType = (sourceNode.data as any).nodeType
+      const outEdges = edges.filter((e) => e.source === params.source)
+
+      const edge: any = { ...params, animated: true, style: { stroke: '#98a2b3', strokeWidth: 2 } }
+
+      // Condition 节点自动标记 true/false
+      if (sourceType === 'condition') {
+        edge.label = outEdges.length === 0 ? 'true' : 'false'
+      }
+
+      setEdges((eds) => addEdge(edge, eds))
     },
-    [setEdges],
+    [nodes, edges, setEdges],
   )
 
   const onAddNode = (type: string, label: string, color: string) => {
@@ -285,6 +322,7 @@ export default function WorkflowEditor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             fitView
