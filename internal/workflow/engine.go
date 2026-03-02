@@ -3,7 +3,6 @@ package workflow
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -19,7 +18,7 @@ func NewEngine(registry *ExecutorRegistry) *Engine {
 	return en
 }
 
-func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any) (map[string]any, map[string]NodeState, error) {
+func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any, eventBus *EventBus) (map[string]any, map[string]NodeState, error) {
 	graph := buildGraph(wf)
 	nodeStates := make(map[string]NodeState)
 	nodeOutputs := make(map[string]map[string]any)
@@ -39,8 +38,12 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any) (m
 		return nil, nil, fmt.Errorf("workflow has no start node")
 	}
 
-	err := e.executeNode(ctx, graph, startID, input, nodeStates, nodeOutputs)
+	err := e.executeNode(ctx, graph, startID, input, nodeStates, nodeOutputs, eventBus)
+
 	if err != nil {
+		// 执行完发结束事件
+		eventBus.Emit(Event{Type: EventFlowFailed, Error: err.Error()})
+		eventBus.Close()
 		return nil, nodeStates, err
 	}
 
@@ -54,6 +57,8 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any) (m
 			break
 		}
 	}
+	eventBus.Emit(Event{Type: EventFlowCompleted, Output: output})
+	eventBus.Close()
 
 	return output, nodeStates, nil
 }
@@ -65,6 +70,7 @@ func (e *Engine) executeNode(
 	input map[string]any,
 	nodeStates map[string]NodeState,
 	nodeOutputs map[string]map[string]any,
+	eventBus *EventBus,
 ) error {
 	if _, done := nodeStates[nodeID]; done {
 		return nil
@@ -86,6 +92,13 @@ func (e *Engine) executeNode(
 	start := time.Now()
 	nodeStates[nodeID] = NodeState{NodeID: nodeID, Status: string(ExecRunning)}
 
+	// 节点开始事件
+	if eventBus != nil {
+		eventBus.Emit(Event{
+			Type: EventNodeStarted, NodeID: nodeID,
+			NodeName: node.Name, NodeType: node.Type,
+		})
+	}
 	output, err := executor.Execute(ctx, node, renderedInput)
 	duration := time.Since(start).Milliseconds()
 	if err != nil {
@@ -108,57 +121,24 @@ func (e *Engine) executeNode(
 	}
 	nodeOutputs[nodeID] = output
 
+	// 节点完成事件
+	if eventBus != nil {
+		eventBus.Emit(Event{
+			Type: EventNodeCompleted, NodeID: nodeID,
+			NodeName: node.Name, NodeType: node.Type,
+			Output: output, Duration: duration,
+		})
+	}
 	// 继续执行下游节点
 	nextIDs := e.resolveNext(node, output, graph)
 
 	for _, nextID := range nextIDs {
-		if err := e.executeNode(ctx, graph, nextID, output, nodeStates, nodeOutputs); err != nil {
+		if err := e.executeNode(ctx, graph, nextID, output, nodeStates, nodeOutputs, eventBus); err != nil {
 			return err
 		}
 	}
 
 	return nil
-}
-
-// 并发执行多个下游节点
-func (e *Engine) executeParallel(
-	ctx context.Context,
-	graph *dagGraph,
-	nodeIDs []string,
-	input map[string]any,
-	nodeStates map[string]NodeState,
-	nodeOutputs map[string]map[string]any,
-) error {
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	var firstErr error
-
-	for _, id := range nodeIDs {
-		wg.Add(1)
-		go func(nid string) {
-			defer wg.Done()
-			// 每个并行分支用独立的 states/outputs 副本，最后合并
-			localStates := make(map[string]NodeState)
-			localOutputs := make(map[string]map[string]any)
-
-			err := e.executeNode(ctx, graph, nid, input, localStates, localOutputs)
-
-			mu.Lock()
-			defer mu.Unlock()
-			for k, v := range localStates {
-				nodeStates[k] = v
-			}
-			for k, v := range localOutputs {
-				nodeOutputs[k] = v
-			}
-			if err != nil && firstErr == nil {
-				firstErr = err
-			}
-		}(id)
-	}
-
-	wg.Wait()
-	return firstErr
 }
 
 func (e *Engine) resolveNext(node *Node, output map[string]any, graph *dagGraph) []string {
