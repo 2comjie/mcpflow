@@ -108,8 +108,11 @@ export default function WorkflowEditor() {
             style: { stroke: '#98a2b3', strokeWidth: 2 },
           }))
           setNodes(flowNodes)
-          setEdges(flowEdges)
           nodeId = flowNodes.length
+          // 延迟设置 edges，确保 nodes 先注册到 React Flow 内部 store
+          requestAnimationFrame(() => {
+            setEdges(flowEdges)
+          })
         })
         .catch((err: any) => message.error(err.message))
     }
