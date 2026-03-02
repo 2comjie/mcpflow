@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/2comjie/mcpflow/internal/config"
-	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/internal/mcpserver"
 	"github.com/2comjie/mcpflow/internal/secret"
@@ -25,9 +24,6 @@ func InitApp(cfg *config.Config, db *gorm.DB) *App {
 	mcpSvc := mcpserver.NewService(db, mcpClient)
 	mustMigrate(mcpSvc.AutoMigrate())
 
-	// LLM Client
-	llmClient := llm.NewClient(cfg.LLM.BaseURL, cfg.LLM.APIKey)
-
 	// Secret
 	secretRepo := secret.NewRepository(db)
 	mustMigrate(secretRepo.AutoMigrate())
@@ -36,7 +32,7 @@ func InitApp(cfg *config.Config, db *gorm.DB) *App {
 	workflowRepo := workflow.NewWorkflowRepository(db)
 	mustMigrate(workflowRepo.AutoMigrate())
 
-	registry := workflow.NewExecutorRegistry(llmClient)
+	registry := workflow.NewExecutorRegistry()
 	engine := workflow.NewEngine(registry)
 	engine.SetSecretStore(secretRepo)
 	workflowSvc := workflow.NewWorkflowService(workflowRepo, engine)

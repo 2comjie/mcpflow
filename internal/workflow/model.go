@@ -200,6 +200,8 @@ type MCPPromptConfig struct {
 type LLMConfig struct {
 	Provider    string  `json:"provider"`
 	Model       string  `json:"model"`
+	BaseURL     string  `json:"base_url"`              // 支持 {{secret.xxx}} 引用
+	APIKey      string  `json:"api_key"`               // 支持 {{secret.xxx}} 引用
 	Prompt      string  `json:"prompt"`
 	SystemMsg   string  `json:"system_msg,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`

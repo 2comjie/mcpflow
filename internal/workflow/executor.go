@@ -27,7 +27,7 @@ type ExecutorRegistry struct {
 	executors map[NodeType]NodeExecutor
 }
 
-func NewExecutorRegistry(llmClient *llm.Client) *ExecutorRegistry {
+func NewExecutorRegistry() *ExecutorRegistry {
 	mcpClient := mcp.NewClient()
 
 	r := &ExecutorRegistry{
@@ -38,7 +38,7 @@ func NewExecutorRegistry(llmClient *llm.Client) *ExecutorRegistry {
 	r.Register(NodeMCPTool, &MCPToolExecutor{client: mcpClient})
 	r.Register(NodeMCPPrompt, &MCPPromptExecutor{client: mcpClient})
 	r.Register(NodeMCPResource, &MCPResourceExecutor{client: mcpClient})
-	r.Register(NodeLLM, &LLMExecutor{client: llmClient})
+	r.Register(NodeLLM, &LLMExecutor{})
 	r.Register(NodeCondition, &ConditionExecutor{})
 	r.Register(NodeCode, &CodeExecutor{})
 	r.Register(NodeHTTP, &HTTPExecutor{
@@ -115,15 +115,18 @@ func (e *MCPResourceExecutor) Execute(ctx context.Context, node *Node, input map
 
 // ==================== LLM ====================
 
-type LLMExecutor struct {
-	client *llm.Client
-}
+type LLMExecutor struct{}
 
 func (e *LLMExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.LLM
 	if cfg == nil {
 		return nil, fmt.Errorf("llm config is nil")
 	}
+	if cfg.BaseURL == "" || cfg.APIKey == "" {
+		return nil, fmt.Errorf("llm base_url and api_key are required")
+	}
+
+	client := llm.NewClient(cfg.BaseURL, cfg.APIKey)
 
 	var messages []llm.Message
 	if cfg.SystemMsg != "" {
@@ -131,7 +134,7 @@ func (e *LLMExecutor) Execute(ctx context.Context, node *Node, input map[string]
 	}
 	messages = append(messages, llm.Message{Role: "user", Content: cfg.Prompt})
 
-	resp, err := e.client.Chat(ctx, &llm.ChatRequest{
+	resp, err := client.Chat(ctx, &llm.ChatRequest{
 		Model:       cfg.Model,
 		Messages:    messages,
 		Temperature: cfg.Temperature,
