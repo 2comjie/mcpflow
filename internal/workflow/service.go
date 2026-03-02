@@ -3,12 +3,14 @@ package workflow
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
 type WorkflowService struct {
-	repo   *WorkflowRepository
-	engine *Engine
+	repo    *WorkflowRepository
+	engine  *Engine
+	cancels sync.Map // executionID -> context.CancelFunc
 }
 
 func NewWorkflowService(repo *WorkflowRepository, engine *Engine) *WorkflowService {
@@ -67,8 +69,13 @@ func (s *WorkflowService) Execute(ctx context.Context, workflowID uint, input ma
 		return nil, err
 	}
 
+	// 执行上下文
+	runCtx, cancel := context.WithCancel(ctx)
+	s.cancels.Store(exec.ID, cancel)
+	defer s.cancels.Delete(exec.ID)
+
 	// 执行DAG
-	output, nodeStates, runErr := s.engine.Run(ctx, wf, input, nil)
+	output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, nil)
 
 	// 更新执行结果
 	finished := time.Now()
@@ -148,10 +155,14 @@ func (s *WorkflowService) ExecuteWithEvents(ctx context.Context, workflowID uint
 	}
 
 	eventBus := NewEventBus()
+	// 执行上下文
+	runCtx, cancel := context.WithCancel(ctx)
+	s.cancels.Store(exec.ID, cancel)
 
 	// 异步执行
 	go func() {
-		output, nodeStates, runErr := s.engine.Run(ctx, wf, input, eventBus)
+		defer s.cancels.Delete(exec.ID)
+		output, nodeStates, runErr := s.engine.Run(runCtx, wf, input, eventBus)
 
 		finished := time.Now()
 		exec.FinishedAt = &finished
@@ -167,4 +178,21 @@ func (s *WorkflowService) ExecuteWithEvents(ctx context.Context, workflowID uint
 	}()
 
 	return exec, eventBus, nil
+}
+
+func (s *WorkflowService) CancelExecution(ctx context.Context, executionID uint) error {
+	cancel, ok := s.cancels.Load(executionID)
+	if !ok {
+		return fmt.Errorf("execution %d is not running", executionID)
+	}
+	cancel.(context.CancelFunc)()
+
+	exec, err := s.repo.GetExecution(ctx, executionID)
+	if err != nil {
+		return err
+	}
+	now := time.Now()
+	exec.Status = ExecCancelled
+	exec.FinishedAt = &now
+	return s.repo.UpdateExecution(ctx, exec)
 }

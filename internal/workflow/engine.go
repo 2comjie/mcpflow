@@ -102,7 +102,16 @@ func (e *Engine) executeNode(
 			NodeName: node.Name, NodeType: node.Type,
 		})
 	}
-	output, err := executor.Execute(ctx, node, renderedInput)
+
+	execCtx := ctx
+	timeout := node.Timeout
+	if timeout <= 0 {
+		timeout = 60 // 默认 60 秒
+	}
+	execCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
+	defer cancel()
+	output, err := executor.Execute(execCtx, node, renderedInput)
+
 	duration := time.Since(start).Milliseconds()
 	if err != nil {
 		nodeStates[nodeID] = NodeState{

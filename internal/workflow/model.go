@@ -146,6 +146,7 @@ type Node struct {
 	Name     string     `json:"name"`
 	Config   NodeConfig `json:"config"`
 	Position Position   `json:"position"`
+	Timeout  int        `json:"timeout,omitempty"` // 秒，0 表示用默认值
 }
 
 type Edge struct {
