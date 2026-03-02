@@ -133,7 +133,7 @@ func validateWorkflow(wf *Workflow) error {
 func (s *WorkflowService) ExecuteWithEvents(ctx context.Context, workflowID uint, input map[string]any) (*WorkflowExecution, *EventBus, error) {
 	wf, err := s.GetByID(ctx, workflowID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("workflow not found: %w", err)
+		return nil, nil, fmt.Errorf("workflow not found %w", err)
 	}
 
 	now := time.Now()
