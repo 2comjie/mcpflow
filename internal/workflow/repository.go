@@ -48,7 +48,9 @@ func (r *WorkflowRepository) List(ctx context.Context, offset, limit int) ([]Wor
 }
 
 func (r *WorkflowRepository) Update(ctx context.Context, w *Workflow) error {
-	return r.db.WithContext(ctx).Save(w).Error
+	return r.db.WithContext(ctx).Model(w).
+		Select("name", "description", "status", "nodes", "edges", "variables").
+		Updates(w).Error
 }
 
 func (r *WorkflowRepository) Delete(ctx context.Context, id uint) error {
