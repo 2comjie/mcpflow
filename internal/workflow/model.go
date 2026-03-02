@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/2comjie/mcpflow/pkg/types"
 )
 
 type NodeType string
@@ -33,28 +35,8 @@ const (
 	ExecCancelled ExecStatus = "cancelled"
 )
 
-// JSON 通用 JSON 字段类型
-type JSON map[string]any
-
-func (j JSON) Value() (driver.Value, error) {
-	if j == nil {
-		return "{}", nil
-	}
-	b, err := json.Marshal(j)
-	return string(b), err
-}
-
-func (j *JSON) Scan(value any) error {
-	if value == nil {
-		*j = make(JSON)
-		return nil
-	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to scan JSON: %v", value)
-	}
-	return json.Unmarshal(bytes, j)
-}
+// JSON 通用 JSON 字段类型，引用公共包
+type JSON = types.JSONMap
 
 // Nodes 节点列表 JSON 类型
 type Nodes []Node
