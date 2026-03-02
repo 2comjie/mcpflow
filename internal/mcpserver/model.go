@@ -22,5 +22,4 @@ func (MCPServer) TableName() string {
 	return "mcp_servers"
 }
 
-// JSON 复用公共包的 JSONMap 类型
 type JSON = types.JSONMap
