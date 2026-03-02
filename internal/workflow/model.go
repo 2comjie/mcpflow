@@ -165,13 +165,14 @@ type Position struct {
 
 // ==================== 节点配置 ====================
 type NodeConfig struct {
-	MCPTool   *MCPToolConfig   `json:"mcp_tool,omitempty"`
-	MCPPrompt *MCPPromptConfig `json:"mcp_prompt,omitempty"`
-	LLM       *LLMConfig       `json:"llm,omitempty"`
-	Condition *ConditionConfig `json:"condition,omitempty"`
-	Loop      *LoopConfig      `json:"loop,omitempty"`
-	Code      *CodeConfig      `json:"code,omitempty"`
-	HTTP      *HTTPConfig      `json:"http,omitempty"`
+	MCPTool     *MCPToolConfig     `json:"mcp_tool,omitempty"`
+	MCPPrompt   *MCPPromptConfig   `json:"mcp_prompt,omitempty"`
+	LLM         *LLMConfig         `json:"llm,omitempty"`
+	Condition   *ConditionConfig   `json:"condition,omitempty"`
+	Loop        *LoopConfig        `json:"loop,omitempty"`
+	Code        *CodeConfig        `json:"code,omitempty"`
+	HTTP        *HTTPConfig        `json:"http,omitempty"`
+	MCPResource *MCPResourceConfig `json:"mcp_resource,omitempty"`
 }
 
 // MCP工具调用配置
@@ -196,6 +197,12 @@ type LLMConfig struct {
 	SystemMsg   string  `json:"system_msg,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`
 	MaxTokens   int     `json:"max_tokens,omitempty"`
+}
+
+// MCP资源读取配置
+type MCPResourceConfig struct {
+	ServerURL string `json:"server_url"`
+	URI       string `json:"uri"`
 }
 
 // 条件分支配置

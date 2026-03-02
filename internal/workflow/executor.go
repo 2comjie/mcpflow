@@ -103,8 +103,11 @@ type MCPResourceExecutor struct {
 }
 
 func (e *MCPResourceExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
-	// TODO: 从 node config 中获取 resource URI
-	return nil, fmt.Errorf("mcp_resource not yet configured")
+	cfg := node.Config.MCPResource
+	if cfg == nil {
+		return nil, fmt.Errorf("mcp_resource config is nil")
+	}
+	return e.client.ReadResource(ctx, cfg.ServerURL, cfg.URI)
 }
 
 // ==================== LLM ====================
