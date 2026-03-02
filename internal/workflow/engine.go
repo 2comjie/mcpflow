@@ -24,6 +24,9 @@ func (e *Engine) Run(ctx context.Context, wf *Workflow, input map[string]any) (m
 	nodeStates := make(map[string]NodeState)
 	nodeOutputs := make(map[string]map[string]any)
 
+	// 存储工作流输入，供模板用 {{input.xxx}} 引用
+	nodeOutputs["__input__"] = input
+
 	// 从开始节点开始
 	startID := ""
 	for _, n := range wf.Nodes {
@@ -78,9 +81,12 @@ func (e *Engine) executeNode(
 		return fmt.Errorf("node type %v executor not found", node.Type)
 	}
 
+	// 渲染模板
+	renderedInput := RenderMap(input, nodeOutputs, nodeOutputs["__input__"])
 	start := time.Now()
 	nodeStates[nodeID] = NodeState{NodeID: nodeID, Status: string(ExecRunning)}
-	output, err := executor.Execute(ctx, node, input)
+
+	output, err := executor.Execute(ctx, node, renderedInput)
 	duration := time.Since(start).Milliseconds()
 	if err != nil {
 		nodeStates[nodeID] = NodeState{
