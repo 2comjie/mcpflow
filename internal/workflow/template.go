@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -60,6 +61,32 @@ func resolvePath(path string, nodeOutputs map[string]map[string]any, input map[s
 	}
 
 	return getNestedValue(data, field)
+}
+
+// renderNodeConfig 渲染节点配置中的模板变量
+// 将 Config 序列化为 JSON → map → RenderMap 渲染 → 反序列化回 NodeConfig
+func renderNodeConfig(node *Node, nodeOutputs map[string]map[string]any, input map[string]any) *Node {
+	b, err := json.Marshal(node.Config)
+	if err != nil {
+		return node
+	}
+	var configMap map[string]any
+	if err := json.Unmarshal(b, &configMap); err != nil {
+		return node
+	}
+	rendered := RenderMap(configMap, nodeOutputs, input)
+	rb, err := json.Marshal(rendered)
+	if err != nil {
+		return node
+	}
+	var newConfig NodeConfig
+	if err := json.Unmarshal(rb, &newConfig); err != nil {
+		return node
+	}
+	// 返回新节点副本，避免修改原始数据
+	newNode := *node
+	newNode.Config = newConfig
+	return &newNode
 }
 
 func getNestedValue(data map[string]any, path string) (any, error) {

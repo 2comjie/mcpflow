@@ -115,8 +115,9 @@ func (e *Engine) executeNode(
 		return fmt.Errorf("node type %v executor not found", node.Type)
 	}
 
-	// 渲染模板
+	// 渲染模板：input + node config
 	renderedInput := RenderMap(input, nodeOutputs, nodeOutputs["__input__"])
+	node = renderNodeConfig(node, nodeOutputs, nodeOutputs["__input__"])
 	start := time.Now()
 	nodeStates[nodeID] = NodeState{NodeID: nodeID, Status: string(ExecRunning)}
 
