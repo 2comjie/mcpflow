@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/pkg/httpx"
@@ -36,7 +37,9 @@ func NewExecutorRegistry() *ExecutorRegistry {
 	r.Register(NodeLLM, &LLMExecutor{})
 	r.Register(NodeCondition, &ConditionExecutor{})
 	r.Register(NodeCode, &CodeExecutor{})
-	r.Register(NodeHTTP, &HTTPExecutor{})
+	r.Register(NodeHTTP, &HTTPExecutor{
+		client: &http.Client{Timeout: 30 * time.Second},
+	})
 	return r
 }
 

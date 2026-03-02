@@ -103,3 +103,51 @@ GET http://localhost:8080/api/v1/executions/1
 
 ### 删除工作流
 DELETE http://localhost:8080/api/v1/workflows/1
+
+### 创建带HTTP节点的工作流 (start -> http -> end)
+POST http://localhost:8080/api/v1/workflows
+Content-Type: application/json
+
+{
+  "name": "http-test-flow",
+  "description": "测试HTTP节点",
+  "nodes": [
+    {
+      "id": "n1",
+      "type": "start",
+      "name": "开始",
+      "config": {},
+      "position": {"x": 0, "y": 0}
+    },
+    {
+      "id": "n2",
+      "type": "http",
+      "name": "请求百度",
+      "config": {
+        "http": {
+          "method": "GET",
+          "url": "https://httpbin.org/get",
+          "headers": {"Accept": "application/json"}
+        }
+      },
+      "position": {"x": 200, "y": 0}
+    },
+    {
+      "id": "n3",
+      "type": "end",
+      "name": "结束",
+      "config": {},
+      "position": {"x": 400, "y": 0}
+    }
+  ],
+  "edges": [
+    {"id": "e1", "source": "n1", "target": "n2"},
+    {"id": "e2", "source": "n2", "target": "n3"}
+  ]
+}
+
+### 执行HTTP工作流
+POST http://localhost:8080/api/v1/workflows/2/execute
+Content-Type: application/json
+
+{}
