@@ -193,6 +193,161 @@ func TestEngine_ConditionBranch(t *testing.T) {
 	_ = output
 }
 
+// ==================== CodeExecutor 测试 ====================
+
+func TestCodeExecutor_ReturnMap(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "javascript",
+				Code:     `({result: input.a + input.b})`,
+			},
+		},
+	}
+
+	input := map[string]any{"a": 3, "b": 5}
+	output, err := executor.Execute(context.Background(), node, input)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	// goja 返回 int64
+	if output["result"] != int64(8) {
+		t.Fatalf("expected result=8, got %v (%T)", output["result"], output["result"])
+	}
+}
+
+func TestCodeExecutor_ReturnScalar(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "javascript",
+				Code:     `input.name + " world"`,
+			},
+		},
+	}
+
+	input := map[string]any{"name": "hello"}
+	output, err := executor.Execute(context.Background(), node, input)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if output["result"] != "hello world" {
+		t.Fatalf("expected 'hello world', got %v", output["result"])
+	}
+}
+
+func TestCodeExecutor_SyntaxError(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "javascript",
+				Code:     `var x = !!!;`,
+			},
+		},
+	}
+
+	_, err := executor.Execute(context.Background(), node, map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for syntax error")
+	}
+}
+
+func TestCodeExecutor_Lua_ReturnTable(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "lua",
+				Code:     `output = {result = input.a + input.b, doubled = true}`,
+			},
+		},
+	}
+
+	input := map[string]any{"a": 3, "b": 5}
+	output, err := executor.Execute(context.Background(), node, input)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if output["result"] != float64(8) {
+		t.Fatalf("expected result=8, got %v (%T)", output["result"], output["result"])
+	}
+	if output["doubled"] != true {
+		t.Fatalf("expected doubled=true, got %v", output["doubled"])
+	}
+}
+
+func TestCodeExecutor_Lua_ReturnScalar(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "lua",
+				Code:     `output = input.name .. " world"`,
+			},
+		},
+	}
+
+	input := map[string]any{"name": "hello"}
+	output, err := executor.Execute(context.Background(), node, input)
+	if err != nil {
+		t.Fatalf("unexpected error %v", err)
+	}
+	if output["result"] != "hello world" {
+		t.Fatalf("expected 'hello world', got %v", output["result"])
+	}
+}
+
+func TestCodeExecutor_Lua_SyntaxError(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{
+				Language: "lua",
+				Code:     `output = {{{}`,
+			},
+		},
+	}
+
+	_, err := executor.Execute(context.Background(), node, map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for lua syntax error")
+	}
+}
+
+func TestCodeExecutor_UnsupportedLang(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{
+		Type: NodeCode,
+		Config: NodeConfig{
+			Code: &CodeConfig{Language: "ruby", Code: "puts 1"},
+		},
+	}
+
+	_, err := executor.Execute(context.Background(), node, map[string]any{})
+	if err == nil {
+		t.Fatal("expected error for unsupported language")
+	}
+}
+
+func TestCodeExecutor_NilConfig(t *testing.T) {
+	executor := &CodeExecutor{}
+	node := &Node{Type: NodeCode, Config: NodeConfig{}}
+
+	_, err := executor.Execute(context.Background(), node, nil)
+	if err == nil {
+		t.Fatal("expected error for nil config")
+	}
+}
+
 func TestEngine_NoStartNode(t *testing.T) {
 	registry := &ExecutorRegistry{executors: map[NodeType]NodeExecutor{}}
 	engine := NewEngine(registry)

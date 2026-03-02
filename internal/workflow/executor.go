@@ -12,7 +12,9 @@ import (
 	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/pkg/httpx"
+	"github.com/dop251/goja"
 	"github.com/expr-lang/expr"
+	lua "github.com/yuin/gopher-lua"
 )
 
 // 执行器
@@ -183,10 +185,116 @@ func (e *CodeExecutor) Execute(ctx context.Context, node *Node, input map[string
 	if cfg == nil {
 		return nil, fmt.Errorf("code config is nil")
 	}
-	// TODO: 沙箱执行代码
-	return map[string]any{
-		"result": "TODO: execute code",
-	}, nil
+
+	switch cfg.Language {
+	case "javascript", "js", "":
+		return e.runJS(cfg.Code, input)
+	case "lua":
+		return e.runLua(cfg.Code, input)
+	default:
+		return nil, fmt.Errorf("unsupported language %s", cfg.Language)
+	}
+}
+
+func (e *CodeExecutor) runJS(code string, input map[string]any) (map[string]any, error) {
+	vm := goja.New()
+	if err := vm.Set("input", input); err != nil {
+		return nil, fmt.Errorf("set input %w", err)
+	}
+
+	val, err := vm.RunString(code)
+	if err != nil {
+		return nil, fmt.Errorf("execute js %w", err)
+	}
+
+	exported := val.Export()
+	switch v := exported.(type) {
+	case map[string]any:
+		return v, nil
+	default:
+		return map[string]any{"result": exported}, nil
+	}
+}
+
+func (e *CodeExecutor) runLua(code string, input map[string]any) (map[string]any, error) {
+	L := lua.NewState()
+	defer L.Close()
+
+	// 注入 input 表
+	L.SetGlobal("input", e.luaValueFromMap(L, input))
+
+	if err := L.DoString(code); err != nil {
+		return nil, fmt.Errorf("execute lua %w", err)
+	}
+
+	// 从全局变量 output 获取返回值
+	result := L.GetGlobal("output")
+	if result == lua.LNil {
+		return map[string]any{"result": nil}, nil
+	}
+
+	if tbl, ok := result.(*lua.LTable); ok {
+		return luaTableToMap(tbl), nil
+	}
+	return map[string]any{"result": luaToGoValue(result)}, nil
+}
+
+// 将 map[string]any 转为 LTable
+func (e *CodeExecutor) luaValueFromMap(L *lua.LState, m map[string]any) *lua.LTable {
+	tbl := L.NewTable()
+	for k, v := range m {
+		tbl.RawSetString(k, e.goToLuaValue(L, v))
+	}
+	return tbl
+}
+
+func (e *CodeExecutor) goToLuaValue(L *lua.LState, v any) lua.LValue {
+	switch val := v.(type) {
+	case string:
+		return lua.LString(val)
+	case int:
+		return lua.LNumber(float64(val))
+	case int64:
+		return lua.LNumber(float64(val))
+	case float64:
+		return lua.LNumber(val)
+	case bool:
+		return lua.LBool(val)
+	case map[string]any:
+		return e.luaValueFromMap(L, val)
+	case nil:
+		return lua.LNil
+	default:
+		return lua.LString(fmt.Sprintf("%v", val))
+	}
+}
+
+// luaTableToMap 将 LTable 转为 map[string]any
+func luaTableToMap(tbl *lua.LTable) map[string]any {
+	result := make(map[string]any)
+	tbl.ForEach(func(k, v lua.LValue) {
+		if key, ok := k.(lua.LString); ok {
+			result[string(key)] = luaToGoValue(v)
+		}
+	})
+	return result
+}
+
+func luaToGoValue(v lua.LValue) any {
+	switch val := v.(type) {
+	case lua.LBool:
+		return bool(val)
+	case lua.LNumber:
+		return float64(val)
+	case *lua.LNilType:
+		return nil
+	case lua.LString:
+		return string(val)
+	case *lua.LTable:
+		return luaTableToMap(val)
+	default:
+		return val.String()
+	}
 }
 
 // ==================== HTTP ====================
