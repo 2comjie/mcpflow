@@ -34,6 +34,8 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 		g.DELETE("/:id", h.Delete)
 		g.POST("/:id/test", h.TestConnection)
 		g.GET("/:id/tools", h.GetTools)
+		g.GET("/:id/prompts", h.GetPrompts)
+		g.GET("/:id/resources", h.GetResources)
 	}
 }
 
@@ -126,4 +128,30 @@ func (h *Handler) GetTools(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"tools": tools})
+}
+
+func (h *Handler) GetPrompts(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	prompts, err := h.svc.GetPrompts(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"prompts": prompts})
+}
+
+func (h *Handler) GetResources(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	resources, err := h.svc.GetResources(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"resources": resources})
 }

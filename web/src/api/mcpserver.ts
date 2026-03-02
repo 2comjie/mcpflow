@@ -19,4 +19,6 @@ export const mcpServerApi = {
   delete: (id: number) => request.delete(`/mcp-servers/${id}`),
   test: (id: number) => request.post(`/mcp-servers/${id}/test`),
   tools: (id: number) => request.get(`/mcp-servers/${id}/tools`),
+  prompts: (id: number) => request.get(`/mcp-servers/${id}/prompts`),
+  resources: (id: number) => request.get(`/mcp-servers/${id}/resources`),
 }

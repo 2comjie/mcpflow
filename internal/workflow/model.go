@@ -19,8 +19,6 @@ const (
 	NodeMCPResource NodeType = "mcp_resource"
 	NodeLLM         NodeType = "llm"
 	NodeCondition   NodeType = "condition"
-	NodeLoop        NodeType = "loop"
-	NodeParallel    NodeType = "parallel"
 	NodeCode        NodeType = "code"
 	NodeHTTP        NodeType = "http"
 )
@@ -200,8 +198,8 @@ type MCPPromptConfig struct {
 type LLMConfig struct {
 	Provider    string  `json:"provider"`
 	Model       string  `json:"model"`
-	BaseURL     string  `json:"base_url"`              // 支持 {{secret.xxx}} 引用
-	APIKey      string  `json:"api_key"`               // 支持 {{secret.xxx}} 引用
+	BaseURL     string  `json:"base_url"` // 支持 {{secret.xxx}} 引用
+	APIKey      string  `json:"api_key"`  // 支持 {{secret.xxx}} 引用
 	Prompt      string  `json:"prompt"`
 	SystemMsg   string  `json:"system_msg,omitempty"`
 	Temperature float64 `json:"temperature,omitempty"`
@@ -247,12 +245,12 @@ type ExecutionLog struct {
 	NodeID      string    `json:"node_id" gorm:"size:100;not null"`
 	NodeName    string    `json:"node_name" gorm:"size:255"`
 	NodeType    NodeType  `json:"node_type" gorm:"size:50"`
-	Attempt     int       `json:"attempt"`                 // 第几次尝试，从 1 开始
-	Status      string    `json:"status" gorm:"size:20"`   // completed/failed
+	Attempt     int       `json:"attempt"`               // 第几次尝试，从 1 开始
+	Status      string    `json:"status" gorm:"size:20"` // completed/failed
 	Input       JSON      `json:"input" gorm:"type:json"`
 	Output      JSON      `json:"output" gorm:"type:json"`
 	Error       string    `json:"error" gorm:"type:text"`
-	Duration    int64     `json:"duration"`                // 毫秒
+	Duration    int64     `json:"duration"` // 毫秒
 	CreatedAt   time.Time `json:"created_at"`
 }
 

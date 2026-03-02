@@ -11,6 +11,11 @@ import {
   Input,
   Tag,
   Tooltip,
+  Drawer,
+  Tabs,
+  Spin,
+  Empty,
+  Descriptions,
 } from 'antd'
 import {
   PlusOutlined,
@@ -19,6 +24,10 @@ import {
   DeleteOutlined,
   SearchOutlined,
   LinkOutlined,
+  ToolOutlined,
+  MessageOutlined,
+  DatabaseOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
 
@@ -29,6 +38,14 @@ export default function MCPServerList() {
   const [editId, setEditId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [form] = Form.useForm()
+
+  // detail drawer
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [detailServer, setDetailServer] = useState<MCPServer | null>(null)
+  const [tools, setTools] = useState<any[]>([])
+  const [prompts, setPrompts] = useState<any[]>([])
+  const [resources, setResources] = useState<any[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   const fetchList = async () => {
     setLoading(true)
@@ -87,11 +104,120 @@ export default function MCPServerList() {
     }
   }
 
+  const openDetail = async (server: MCPServer) => {
+    setDetailServer(server)
+    setDrawerOpen(true)
+    setDetailLoading(true)
+    setTools([])
+    setPrompts([])
+    setResources([])
+
+    try {
+      const [toolsRes, promptsRes, resourcesRes]: any[] = await Promise.allSettled([
+        mcpServerApi.tools(server.id),
+        mcpServerApi.prompts(server.id),
+        mcpServerApi.resources(server.id),
+      ])
+      if (toolsRes.status === 'fulfilled') setTools(toolsRes.value?.tools || [])
+      if (promptsRes.status === 'fulfilled') setPrompts(promptsRes.value?.prompts || [])
+      if (resourcesRes.status === 'fulfilled') setResources(resourcesRes.value?.resources || [])
+    } catch {
+      // ignore
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  const refreshDetail = () => {
+    if (detailServer) openDetail(detailServer)
+  }
+
   const filtered = servers.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
       s.url.toLowerCase().includes(search.toLowerCase()) ||
       (s.description || '').toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const renderToolItem = (tool: any) => (
+    <div
+      key={tool.name}
+      style={{
+        padding: '12px 16px',
+        background: '#f9fafb',
+        borderRadius: 8,
+        marginBottom: 8,
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{tool.name}</div>
+      {tool.description && (
+        <div style={{ fontSize: 12, color: '#667085', marginBottom: 8 }}>{tool.description}</div>
+      )}
+      {tool.inputSchema?.properties && (
+        <div style={{ fontSize: 12 }}>
+          <span style={{ color: '#98a2b3' }}>Parameters: </span>
+          {Object.keys(tool.inputSchema.properties).map((key) => (
+            <Tag key={key} style={{ fontSize: 11, borderRadius: 4, marginBottom: 2 }}>
+              {key}
+              {tool.inputSchema.required?.includes(key) && (
+                <span style={{ color: '#f04438' }}>*</span>
+              )}
+            </Tag>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderPromptItem = (prompt: any) => (
+    <div
+      key={prompt.name}
+      style={{
+        padding: '12px 16px',
+        background: '#f9fafb',
+        borderRadius: 8,
+        marginBottom: 8,
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{prompt.name}</div>
+      {prompt.description && (
+        <div style={{ fontSize: 12, color: '#667085', marginBottom: 8 }}>{prompt.description}</div>
+      )}
+      {prompt.arguments && prompt.arguments.length > 0 && (
+        <div style={{ fontSize: 12 }}>
+          <span style={{ color: '#98a2b3' }}>Arguments: </span>
+          {prompt.arguments.map((arg: any) => (
+            <Tag key={arg.name} style={{ fontSize: 11, borderRadius: 4, marginBottom: 2 }}>
+              {arg.name}
+              {arg.required && <span style={{ color: '#f04438' }}>*</span>}
+            </Tag>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderResourceItem = (resource: any) => (
+    <div
+      key={resource.uri}
+      style={{
+        padding: '12px 16px',
+        background: '#f9fafb',
+        borderRadius: 8,
+        marginBottom: 8,
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>
+        {resource.name || resource.uri}
+      </div>
+      {resource.description && (
+        <div style={{ fontSize: 12, color: '#667085', marginBottom: 4 }}>{resource.description}</div>
+      )}
+      <div style={{ fontSize: 12, color: '#98a2b3', fontFamily: 'monospace' }}>{resource.uri}</div>
+      {resource.mimeType && (
+        <Tag style={{ fontSize: 11, borderRadius: 4, marginTop: 4 }}>{resource.mimeType}</Tag>
+      )}
+    </div>
   )
 
   return (
@@ -166,7 +292,11 @@ export default function MCPServerList() {
               <div className="server-card">
                 <div className="server-card-header">
                   <div>
-                    <div className="server-card-name">
+                    <div
+                      className="server-card-name"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => openDetail(server)}
+                    >
                       <span
                         className={`status-dot ${server.status === 'active' ? 'status-dot-active' : 'status-dot-inactive'}`}
                       />
@@ -197,6 +327,17 @@ export default function MCPServerList() {
                         style={{ color: '#3b5bdb' }}
                       >
                         Test
+                      </Button>
+                    </Tooltip>
+                    <Tooltip title="Detail">
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<ToolOutlined />}
+                        onClick={() => openDetail(server)}
+                        style={{ color: '#667085' }}
+                      >
+                        Detail
                       </Button>
                     </Tooltip>
                     <Tooltip title="Edit">
@@ -230,6 +371,104 @@ export default function MCPServerList() {
         </Row>
       )}
 
+      {/* Detail Drawer */}
+      <Drawer
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <CloudServerOutlined style={{ color: '#3b5bdb' }} />
+              <span>{detailServer?.name}</span>
+              <Tag
+                color={detailServer?.status === 'active' ? 'green' : 'default'}
+                style={{ borderRadius: 4, fontSize: 11, margin: 0 }}
+              >
+                {detailServer?.status === 'active' ? 'Online' : 'Offline'}
+              </Tag>
+            </div>
+            <Tooltip title="Refresh">
+              <Button
+                type="text"
+                size="small"
+                icon={<ReloadOutlined spin={detailLoading} />}
+                onClick={refreshDetail}
+              />
+            </Tooltip>
+          </div>
+        }
+        open={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        width={560}
+      >
+        {detailServer && (
+          <>
+            <Descriptions column={1} size="small" style={{ marginBottom: 16 }}>
+              <Descriptions.Item label="URL">
+                <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{detailServer.url}</span>
+              </Descriptions.Item>
+              {detailServer.description && (
+                <Descriptions.Item label="Description">{detailServer.description}</Descriptions.Item>
+              )}
+              <Descriptions.Item label="Created">{detailServer.created_at}</Descriptions.Item>
+            </Descriptions>
+
+            {detailLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}>
+                <Spin tip="Loading capabilities..." />
+              </div>
+            ) : (
+              <Tabs
+                defaultActiveKey="tools"
+                items={[
+                  {
+                    key: 'tools',
+                    label: (
+                      <span>
+                        <ToolOutlined /> Tools ({tools.length})
+                      </span>
+                    ),
+                    children:
+                      tools.length > 0 ? (
+                        tools.map(renderToolItem)
+                      ) : (
+                        <Empty description="No tools available" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      ),
+                  },
+                  {
+                    key: 'prompts',
+                    label: (
+                      <span>
+                        <MessageOutlined /> Prompts ({prompts.length})
+                      </span>
+                    ),
+                    children:
+                      prompts.length > 0 ? (
+                        prompts.map(renderPromptItem)
+                      ) : (
+                        <Empty description="No prompts available" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      ),
+                  },
+                  {
+                    key: 'resources',
+                    label: (
+                      <span>
+                        <DatabaseOutlined /> Resources ({resources.length})
+                      </span>
+                    ),
+                    children:
+                      resources.length > 0 ? (
+                        resources.map(renderResourceItem)
+                      ) : (
+                        <Empty description="No resources available" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      ),
+                  },
+                ]}
+              />
+            )}
+          </>
+        )}
+      </Drawer>
+
+      {/* Create/Edit Modal */}
       <Modal
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

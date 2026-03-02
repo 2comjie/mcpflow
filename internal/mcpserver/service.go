@@ -100,3 +100,21 @@ func (s *Service) GetTools(ctx context.Context, id uint) ([]map[string]any, erro
 	// 缓存没有就实时获取
 	return s.TestConnection(ctx, id)
 }
+
+// GetPrompts 获取某个 MCP Server 的提示词列表
+func (s *Service) GetPrompts(ctx context.Context, id uint) ([]map[string]any, error) {
+	server, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.mcpClient.ListPrompts(ctx, server.URL)
+}
+
+// GetResources 获取某个 MCP Server 的资源列表
+func (s *Service) GetResources(ctx context.Context, id uint) ([]map[string]any, error) {
+	server, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return s.mcpClient.ListResources(ctx, server.URL)
+}

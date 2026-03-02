@@ -151,3 +151,35 @@ func (c *Client) ListTools(ctx context.Context, serverURL string) ([]map[string]
 	}
 	return out.Tools, nil
 }
+
+// 列出 MCP 提示词 (prompts/list)
+func (c *Client) ListPrompts(ctx context.Context, serverURL string) ([]map[string]any, error) {
+	result, err := c.call(ctx, serverURL, "prompts/list", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Prompts []map[string]any `json:"prompts"`
+	}
+	if err := json.Unmarshal(result, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal prompts list: %w", err)
+	}
+	return out.Prompts, nil
+}
+
+// 列出 MCP 资源 (resources/list)
+func (c *Client) ListResources(ctx context.Context, serverURL string) ([]map[string]any, error) {
+	result, err := c.call(ctx, serverURL, "resources/list", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var out struct {
+		Resources []map[string]any `json:"resources"`
+	}
+	if err := json.Unmarshal(result, &out); err != nil {
+		return nil, fmt.Errorf("unmarshal resources list: %w", err)
+	}
+	return out.Resources, nil
+}
