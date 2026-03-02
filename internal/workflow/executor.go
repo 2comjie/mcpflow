@@ -2,9 +2,14 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 
 	"github.com/2comjie/mcpflow/internal/mcp"
+	"github.com/2comjie/mcpflow/pkg/httpx"
 )
 
 // 执行器
@@ -147,16 +152,52 @@ func (e *CodeExecutor) Execute(ctx context.Context, node *Node, input map[string
 
 // ==================== HTTP ====================
 
-type HTTPExecutor struct{}
+type HTTPExecutor struct {
+	client *http.Client
+}
 
 func (e *HTTPExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.HTTP
 	if cfg == nil {
 		return nil, fmt.Errorf("http config is nil")
 	}
-	// TODO: 发起 HTTP 请求
-	return map[string]any{
-		"status": 200,
-		"body":   "TODO: http call",
-	}, nil
+
+	var bodyReader io.Reader
+	if cfg.Body != "" {
+		bodyReader = strings.NewReader(cfg.Body)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, cfg.Method, cfg.URL, bodyReader)
+	if err != nil {
+		return nil, fmt.Errorf("create request %w", err)
+	}
+
+	for k, v := range cfg.Headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response %w", err)
+	}
+
+	result := map[string]any{
+		"status":  resp.StatusCode,
+		"headers": httpx.HeaderToMap(resp.Header),
+		"body":    string(respBody),
+	}
+
+	// 尝试解析 JSON 响应
+	var jsonBody any
+	if json.Unmarshal(respBody, &jsonBody) == nil {
+		result["json"] = jsonBody
+	}
+
+	return result, nil
 }
