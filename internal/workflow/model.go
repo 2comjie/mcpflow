@@ -36,7 +36,7 @@ const (
 // JSON 通用 JSON 字段类型
 type JSON map[string]any
 
-func (j *JSON) Value() (driver.Value, error) {
+func (j JSON) Value() (driver.Value, error) {
 	if j == nil {
 		return "{}", nil
 	}
@@ -59,7 +59,7 @@ func (j *JSON) Scan(value any) error {
 // Nodes 节点列表 JSON 类型
 type Nodes []Node
 
-func (n *Nodes) Value() (driver.Value, error) {
+func (n Nodes) Value() (driver.Value, error) {
 	if n == nil {
 		return "[]", nil
 	}
@@ -82,7 +82,7 @@ func (n *Nodes) Scan(value any) error {
 // Edges 边列表 JSON 类型
 type Edges []Edge
 
-func (e *Edges) Value() (driver.Value, error) {
+func (e Edges) Value() (driver.Value, error) {
 	if e == nil {
 		return "[]", nil
 	}
@@ -105,7 +105,7 @@ func (e *Edges) Scan(value any) error {
 // NodeStates 节点状态映射 JSON 类型
 type NodeStates map[string]NodeState
 
-func (ns *NodeStates) Value() (driver.Value, error) {
+func (ns NodeStates) Value() (driver.Value, error) {
 	if ns == nil {
 		return "{}", nil
 	}
