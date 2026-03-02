@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/2comjie/mcpflow/internal/config"
+	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/workflow"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
@@ -30,7 +31,11 @@ func main() {
 		log.Fatalf("failed to migrate: %v", err)
 	}
 
-	registry := workflow.NewExecutorRegistry()
+	// 初始化 LLM Client
+	llmClient := llm.NewClient(cfg.LLM.BaseURL, cfg.LLM.APIKey)
+
+	// 传入 registry
+	registry := workflow.NewExecutorRegistry(llmClient)
 	engine := workflow.NewEngine(registry)
 	svc := workflow.NewWorkflowService(repo, engine)
 	handler := workflow.NewWorkflowHandler(svc)

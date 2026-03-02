@@ -7,3 +7,7 @@ database:
   user: root
   password: 123
   name: mcpflow
+
+llm:
+  base_url: https://api.deepseek.com  # api
+  api_key: sk-c52cf0b318924b8384e88afae3a282ea

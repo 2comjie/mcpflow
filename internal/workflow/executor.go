@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/pkg/httpx"
 )
@@ -23,7 +24,7 @@ type ExecutorRegistry struct {
 	executors map[NodeType]NodeExecutor
 }
 
-func NewExecutorRegistry() *ExecutorRegistry {
+func NewExecutorRegistry(llmClient *llm.Client) *ExecutorRegistry {
 	mcpClient := mcp.NewClient()
 
 	r := &ExecutorRegistry{
@@ -34,7 +35,7 @@ func NewExecutorRegistry() *ExecutorRegistry {
 	r.Register(NodeMCPTool, &MCPToolExecutor{client: mcpClient})
 	r.Register(NodeMCPPrompt, &MCPPromptExecutor{client: mcpClient})
 	r.Register(NodeMCPResource, &MCPResourceExecutor{client: mcpClient})
-	r.Register(NodeLLM, &LLMExecutor{})
+	r.Register(NodeLLM, &LLMExecutor{client: llmClient})
 	r.Register(NodeCondition, &ConditionExecutor{})
 	r.Register(NodeCode, &CodeExecutor{})
 	r.Register(NodeHTTP, &HTTPExecutor{
@@ -108,17 +109,41 @@ func (e *MCPResourceExecutor) Execute(ctx context.Context, node *Node, input map
 
 // ==================== LLM ====================
 
-type LLMExecutor struct{}
+type LLMExecutor struct {
+	client *llm.Client
+}
 
 func (e *LLMExecutor) Execute(ctx context.Context, node *Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.LLM
 	if cfg == nil {
 		return nil, fmt.Errorf("llm config is nil")
 	}
-	// TODO: 调用 LLM API (OpenAI / Anthropic 等)
+
+	messages := []llm.Message{}
+	if cfg.SystemMsg != "" {
+		messages = append(messages, llm.Message{Role: "system", Content: cfg.SystemMsg})
+	}
+	messages = append(messages, llm.Message{Role: "user", Content: cfg.Prompt})
+
+	resp, err := e.client.Chat(ctx, &llm.ChatRequest{
+		Model:       cfg.Model,
+		Messages:    messages,
+		Temperature: cfg.Temperature,
+		MaxTokens:   cfg.MaxTokens,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	content := ""
+	if len(resp.Choices) > 0 {
+		content = resp.Choices[0].Message.Content
+	}
+
 	return map[string]any{
-		"model":  cfg.Model,
-		"result": "TODO: call llm api",
+		"content":      content,
+		"model":        cfg.Model,
+		"total_tokens": resp.Usage.TotalTokens,
 	}, nil
 }
 
