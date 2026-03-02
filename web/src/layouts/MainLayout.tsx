@@ -1,10 +1,18 @@
-import { Layout, Menu } from 'antd'
+import { useState } from 'react'
+import { Layout, Menu, Tooltip } from 'antd'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { ApartmentOutlined, CloudServerOutlined } from '@ant-design/icons'
+import {
+  HomeOutlined,
+  ApartmentOutlined,
+  CloudServerOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined,
+} from '@ant-design/icons'
 
-const { Header, Content, Sider } = Layout
+const { Content, Sider } = Layout
 
 const menuItems = [
+  { key: '/', icon: <HomeOutlined />, label: 'Home' },
   { key: '/workflows', icon: <ApartmentOutlined />, label: 'Workflows' },
   { key: '/mcp-servers', icon: <CloudServerOutlined />, label: 'MCP Servers' },
 ]
@@ -12,23 +20,129 @@ const menuItems = [
 export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [collapsed, setCollapsed] = useState(false)
+
+  const getSelectedKey = () => {
+    if (location.pathname.startsWith('/mcp-servers')) return '/mcp-servers'
+    if (location.pathname.startsWith('/workflows')) return '/workflows'
+    return '/'
+  }
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Sider theme="light" width={200}>
-        <div style={{ height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18 }}>
-          MCPFlow
+      <Sider
+        className="sidebar"
+        width={220}
+        collapsedWidth={64}
+        collapsed={collapsed}
+        theme="light"
+        style={{
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          zIndex: 100,
+          overflow: 'auto',
+        }}
+      >
+        <div
+          style={{
+            height: 56,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: collapsed ? 'center' : 'space-between',
+            padding: collapsed ? '0' : '0 16px',
+            borderBottom: '1px solid #eaecf0',
+          }}
+        >
+          {collapsed ? (
+            <Tooltip title="MCPFlow" placement="right">
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #3b5bdb 0%, #5c7cfa 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                }}
+                onClick={() => navigate('/')}
+              >
+                M
+              </div>
+            </Tooltip>
+          ) : (
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              onClick={() => navigate('/')}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  background: 'linear-gradient(135deg, #3b5bdb 0%, #5c7cfa 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: 14,
+                }}
+              >
+                M
+              </div>
+              <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e', letterSpacing: -0.3 }}>
+                MCPFlow
+              </span>
+            </div>
+          )}
         </div>
+
         <Menu
           mode="inline"
-          selectedKeys={[location.pathname.startsWith('/mcp-servers') ? '/mcp-servers' : '/workflows']}
+          selectedKeys={[getSelectedKey()]}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
+          style={{ marginTop: 8 }}
         />
+
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 0,
+            right: 0,
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={() => setCollapsed(!collapsed)}
+            style={{
+              cursor: 'pointer',
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#98a2b3',
+              transition: 'all 0.2s',
+            }}
+          >
+            {collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          </div>
+        </div>
       </Sider>
-      <Layout>
-        <Header style={{ background: '#fff', padding: '0 24px', borderBottom: '1px solid #f0f0f0' }} />
-        <Content style={{ margin: 16 }}>
+
+      <Layout style={{ marginLeft: collapsed ? 64 : 220, transition: 'margin-left 0.2s' }}>
+        <Content style={{ padding: 24 }}>
           <Outlet />
         </Content>
       </Layout>
