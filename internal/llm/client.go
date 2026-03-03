@@ -7,34 +7,34 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
+	"strings"
 )
 
 type Client struct {
-	httpClient *http.Client
-	baseURL    string
-	apiKey     string
+	baseURL string
+	apiKey  string
+	http    *http.Client
 }
 
 func NewClient(baseURL, apiKey string) *Client {
+	baseURL = strings.TrimRight(baseURL, "/")
 	return &Client{
-		httpClient: &http.Client{Timeout: 120 * time.Second},
-		baseURL:    baseURL,
-		apiKey:     apiKey,
+		baseURL: baseURL,
+		apiKey:  apiKey,
+		http:    &http.Client{},
 	}
-}
-
-// OpenAI 兼容格式
-type ChatRequest struct {
-	Model       string    `json:"model"`
-	Messages    []Message `json:"messages"`
-	Temperature float64   `json:"temperature,omitempty"`
-	MaxTokens   int       `json:"max_tokens,omitempty"`
 }
 
 type Message struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+}
+
+type ChatRequest struct {
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Temperature float64   `json:"temperature,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
 }
 
 type ChatResponse struct {
@@ -54,39 +54,39 @@ type Usage struct {
 	TotalTokens      int `json:"total_tokens"`
 }
 
+// Chat 发送聊天请求（OpenAI 兼容接口）
 func (c *Client) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	url := c.baseURL + "/v1/chat/completions"
+	url := c.baseURL + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("create request %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("send request %w", err)
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read response %w", err)
+		return nil, fmt.Errorf("read response: %w", err)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("llm api error(%d) %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("LLM API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
 	var chatResp ChatResponse
 	if err := json.Unmarshal(respBody, &chatResp); err != nil {
-		return nil, fmt.Errorf("decode response %w", err)
+		return nil, fmt.Errorf("unmarshal response: %w", err)
 	}
-
 	return &chatResp, nil
 }

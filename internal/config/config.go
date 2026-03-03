@@ -13,19 +13,19 @@ type Config struct {
 }
 
 type ServerConfig struct {
-	Port int `yaml:"port"`
+	Port string `yaml:"port"`
 }
 
 type DatabaseConfig struct {
 	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
+	Port     string `yaml:"port"`
 	User     string `yaml:"user"`
 	Password string `yaml:"password"`
 	Name     string `yaml:"name"`
 }
 
 func (d *DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
 		d.User, d.Password, d.Host, d.Port, d.Name)
 }
 
@@ -37,6 +37,9 @@ func Load(path string) (*Config, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	if cfg.Server.Port == "" {
+		cfg.Server.Port = "8080"
 	}
 	return &cfg, nil
 }

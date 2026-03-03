@@ -5,7 +5,7 @@ import Dashboard from './pages/dashboard/Dashboard'
 import WorkflowList from './pages/workflow/WorkflowList'
 import WorkflowEditor from './pages/workflow/WorkflowEditor'
 import MCPServerList from './pages/mcpserver/MCPServerList'
-import SecretList from './pages/secret/SecretList'
+import LLMProviderList from './pages/llmprovider/LLMProviderList'
 import ExecutionList from './pages/execution/ExecutionList'
 import AllExecutions from './pages/execution/AllExecutions'
 
@@ -51,7 +51,7 @@ export default function App() {
             <Route path="/workflows/:id/executions" element={<ExecutionList />} />
             <Route path="/executions" element={<AllExecutions />} />
             <Route path="/mcp-servers" element={<MCPServerList />} />
-            <Route path="/secrets" element={<SecretList />} />
+            <Route path="/llm-providers" element={<LLMProviderList />} />
           </Route>
           <Route path="/workflows/:id" element={<WorkflowEditor />} />
         </Routes>

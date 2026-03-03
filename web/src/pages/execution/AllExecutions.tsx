@@ -4,7 +4,6 @@ import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
-  StopOutlined,
   SyncOutlined,
   FileTextOutlined,
 } from '@ant-design/icons'
@@ -24,7 +23,6 @@ const statusTag = (status: string) => {
     completed: { color: 'success', icon: <CheckCircleOutlined /> },
     failed: { color: 'error', icon: <CloseCircleOutlined /> },
     running: { color: 'processing', icon: <SyncOutlined spin /> },
-    cancelled: { color: 'default', icon: <StopOutlined /> },
     pending: { color: 'warning', icon: <ClockCircleOutlined /> },
   }
   const cfg = map[status] || { color: 'default', icon: null }
@@ -72,16 +70,6 @@ export default function AllExecutions() {
       setDetail(exec)
       setLogs(logsRes.data || [])
       setDrawerOpen(true)
-    } catch (err: any) {
-      message.error(err.message)
-    }
-  }
-
-  const handleCancel = async (execId: number) => {
-    try {
-      await executionApi.cancel(execId)
-      message.success('Cancelled')
-      loadExecutions(page)
     } catch (err: any) {
       message.error(err.message)
     }
@@ -143,11 +131,6 @@ export default function AllExecutions() {
           >
             Detail
           </Button>
-          {record.status === 'running' && (
-            <Button type="link" size="small" danger onClick={() => handleCancel(record.id)}>
-              Cancel
-            </Button>
-          )}
         </Space>
       ),
     },

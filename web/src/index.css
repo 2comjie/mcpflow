@@ -178,7 +178,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: #f0f2f8;
 }
 
 .editor-toolbar {
@@ -187,8 +187,9 @@ body {
   justify-content: space-between;
   padding: 12px 20px;
   background: #fff;
-  border-bottom: 1px solid #eaecf0;
+  border-bottom: 1px solid #e2e5ed;
   z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .editor-toolbar-left {
@@ -213,9 +214,11 @@ body {
 .node-palette {
   width: 220px;
   background: #fff;
-  border-right: 1px solid #eaecf0;
+  border-right: 1px solid #e2e5ed;
   padding: 16px;
   overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.03);
+  z-index: 1;
 }
 
 .node-palette-group {
@@ -314,6 +317,11 @@ body {
 .canvas-area {
   flex: 1;
   position: relative;
+  background: #f8f9fc;
+}
+
+.canvas-area .react-flow__background {
+  background: #f8f9fc;
 }
 
 /* Server card */

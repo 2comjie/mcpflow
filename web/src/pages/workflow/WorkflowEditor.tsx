@@ -11,8 +11,6 @@ import {
   RobotOutlined,
   FlagOutlined,
   CheckCircleOutlined,
-  CloudOutlined,
-  FileTextOutlined,
   GlobalOutlined,
   SettingOutlined,
   CloseOutlined,
@@ -32,7 +30,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { workflowApi } from '../../api/workflow'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
-import { secretApi, type Secret } from '../../api/secret'
+import { llmProviderApi, type LLMProvider } from '../../api/llm_provider'
 
 const nodeGroups = [
   {
@@ -44,17 +42,10 @@ const nodeGroups = [
     ],
   },
   {
-    title: 'MCP',
-    items: [
-      { type: 'mcp_tool', label: 'MCP Tool', color: '#3b5bdb', icon: <ApiOutlined /> },
-      { type: 'mcp_prompt', label: 'MCP Prompt', color: '#7c3aed', icon: <FileTextOutlined /> },
-      { type: 'mcp_resource', label: 'MCP Resource', color: '#0891b2', icon: <CloudOutlined /> },
-    ],
-  },
-  {
     title: 'PROCESSING',
     items: [
       { type: 'llm', label: 'LLM', color: '#ea580c', icon: <RobotOutlined /> },
+      { type: 'mcp', label: 'MCP', color: '#3b5bdb', icon: <ApiOutlined /> },
       { type: 'code', label: 'Code', color: '#4f46e5', icon: <CodeOutlined /> },
       { type: 'http', label: 'HTTP', color: '#db2777', icon: <GlobalOutlined /> },
     ],
@@ -84,12 +75,12 @@ export default function WorkflowEditor() {
   const [mcpResources, setMcpResources] = useState<any[]>([])
   const [mcpLoading, setMcpLoading] = useState(false)
 
-  // Secrets
-  const [secrets, setSecrets] = useState<Secret[]>([])
+  // LLM Providers
+  const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
 
   useEffect(() => {
-    mcpServerApi.list().then((res: any) => setMcpServers(res.data || [])).catch(() => {})
-    secretApi.list().then((res: any) => setSecrets(res.data || [])).catch(() => {})
+    mcpServerApi.list().then((res: any) => setMcpServers(Array.isArray(res) ? res : res.data || [])).catch(() => {})
+    llmProviderApi.list().then((res: any) => setLlmProviders(Array.isArray(res) ? res : res.data || [])).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -134,22 +125,18 @@ export default function WorkflowEditor() {
     }
   }, [id])
 
-  // 当选中 MCP 节点时，自动加载对应 server 的能力列表
-  const loadServerCapabilities = async (serverUrl: string, nodeType: string) => {
-    const server = mcpServers.find((s) => s.url === serverUrl)
-    if (!server) return
+  // 加载 MCP Server 能力
+  const loadServerCapabilities = async (serverId: number) => {
     setMcpLoading(true)
     try {
-      if (nodeType === 'mcp_tool') {
-        const res: any = await mcpServerApi.tools(server.id)
-        setMcpTools(res.tools || [])
-      } else if (nodeType === 'mcp_prompt') {
-        const res: any = await mcpServerApi.prompts(server.id)
-        setMcpPrompts(res.prompts || [])
-      } else if (nodeType === 'mcp_resource') {
-        const res: any = await mcpServerApi.resources(server.id)
-        setMcpResources(res.resources || [])
-      }
+      const [toolsRes, promptsRes, resourcesRes]: any[] = await Promise.allSettled([
+        mcpServerApi.tools(serverId),
+        mcpServerApi.prompts(serverId),
+        mcpServerApi.resources(serverId),
+      ])
+      if (toolsRes.status === 'fulfilled') setMcpTools(Array.isArray(toolsRes.value) ? toolsRes.value : toolsRes.value?.tools || [])
+      if (promptsRes.status === 'fulfilled') setMcpPrompts(Array.isArray(promptsRes.value) ? promptsRes.value : promptsRes.value?.prompts || [])
+      if (resourcesRes.status === 'fulfilled') setMcpResources(Array.isArray(resourcesRes.value) ? resourcesRes.value : resourcesRes.value?.resources || [])
     } catch {
       // ignore
     } finally {
@@ -157,17 +144,15 @@ export default function WorkflowEditor() {
     }
   }
 
-  // 当选中节点变化时，如果是 MCP 节点且已选了 server，加载能力
+  // 当选中 MCP 节点且已选了 server，加载能力
   useEffect(() => {
     if (!selectedNode) return
     const nodeType = (selectedNode.data as any).nodeType
-    const config = (selectedNode.data as any).config || {}
-    let serverUrl = ''
-    if (nodeType === 'mcp_tool') serverUrl = config.mcp_tool?.server_url || ''
-    else if (nodeType === 'mcp_prompt') serverUrl = config.mcp_prompt?.server_url || ''
-    else if (nodeType === 'mcp_resource') serverUrl = config.mcp_resource?.server_url || ''
-    if (serverUrl) {
-      loadServerCapabilities(serverUrl, nodeType)
+    if (nodeType !== 'mcp') return
+    const config = (selectedNode.data as any).config?.mcp || {}
+    if (config.server_url) {
+      const server = mcpServers.find((s) => s.url === config.server_url)
+      if (server) loadServerCapabilities(server.id)
     } else {
       setMcpTools([])
       setMcpPrompts([])
@@ -288,7 +273,7 @@ export default function WorkflowEditor() {
     if (isNew) return
     try {
       const res: any = await workflowApi.execute(Number(id))
-      message.success(`Executed, status: ${res.status}`)
+      message.success(`Execution started: #${res.execution_id}`)
     } catch (err: any) {
       message.error(err.message)
     }
@@ -318,39 +303,72 @@ export default function WorkflowEditor() {
     .filter((s) => s.status === 'active')
     .map((s) => ({ value: s.url, label: `${s.name} (${s.url})` }))
 
-  const handleServerChange = (serverUrl: string, configPrefix: string) => {
-    updateNodeConfig(`${configPrefix}.server_url`, serverUrl)
-    // 自动填充选中服务器的 headers
+  const handleMCPServerChange = (serverUrl: string) => {
+    if (!selectedNode) return
+    const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
+    if (!config.mcp) config.mcp = {}
+    config.mcp.server_url = serverUrl
+
+    // 自动填充 headers
     const server = mcpServers.find((s) => s.url === serverUrl)
     if (server?.headers && Object.keys(server.headers).length > 0) {
-      updateNodeConfig(`${configPrefix}.headers`, server.headers)
+      config.mcp.headers = server.headers
     } else {
-      updateNodeConfig(`${configPrefix}.headers`, undefined)
+      delete config.mcp.headers
     }
-    // 清除之前选中的 tool/prompt/resource
-    if (configPrefix === 'mcp_tool') {
-      updateNodeConfig('mcp_tool.tool_name', '')
-      setMcpTools([])
-    } else if (configPrefix === 'mcp_prompt') {
-      updateNodeConfig('mcp_prompt.prompt_name', '')
-      setMcpPrompts([])
-    } else if (configPrefix === 'mcp_resource') {
-      updateNodeConfig('mcp_resource.uri', '')
-      setMcpResources([])
-    }
-    const nodeType = (selectedNode?.data as any)?.nodeType
-    if (nodeType) loadServerCapabilities(serverUrl, nodeType)
+
+    // 清除之前的选择
+    config.mcp.tool_name = ''
+    config.mcp.prompt_name = ''
+    config.mcp.resource_uri = ''
+    setMcpTools([])
+    setMcpPrompts([])
+    setMcpResources([])
+
+    setNodes((nds) =>
+      nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
+    )
+    setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, config } })
+
+    if (server) loadServerCapabilities(server.id)
   }
 
-  // MCP Tool Panel
-  const renderMCPToolPanel = () => {
-    const config = (selectedNode?.data as any)?.config?.mcp_tool || {}
+  const handleLLMProviderChange = (providerId: number) => {
+    const provider = llmProviders.find((p) => p.id === providerId)
+    if (!provider || !selectedNode) return
+    const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
+    if (!config.llm) config.llm = {}
+    config.llm.base_url = provider.base_url
+    config.llm.api_key = provider.api_key
+
+    setNodes((nds) =>
+      nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
+    )
+    setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, config } })
+  }
+
+  // MCP 统一面板
+  const renderMCPPanel = () => {
+    const config = (selectedNode?.data as any)?.config?.mcp || {}
     return (
       <>
+        <Form.Item label="Action">
+          <Select
+            value={config.action || undefined}
+            onChange={(v) => updateNodeConfig('mcp.action', v)}
+            placeholder="Select action"
+            style={{ borderRadius: 8 }}
+            options={[
+              { value: 'call_tool', label: 'Call Tool' },
+              { value: 'get_prompt', label: 'Get Prompt' },
+              { value: 'read_resource', label: 'Read Resource' },
+            ]}
+          />
+        </Form.Item>
         <Form.Item label="MCP Server">
           <Select
             value={config.server_url || undefined}
-            onChange={(v) => handleServerChange(v, 'mcp_tool')}
+            onChange={handleMCPServerChange}
             options={serverOptions}
             placeholder="Select MCP Server"
             style={{ borderRadius: 8 }}
@@ -358,136 +376,161 @@ export default function WorkflowEditor() {
             optionFilterProp="label"
           />
         </Form.Item>
-        <Form.Item label="Tool">
-          {mcpLoading ? (
-            <Spin size="small" />
-          ) : (
-            <Select
-              value={config.tool_name || undefined}
-              onChange={(v) => updateNodeConfig('mcp_tool.tool_name', v)}
-              placeholder={config.server_url ? 'Select tool' : 'Select a server first'}
-              disabled={!config.server_url}
-              style={{ borderRadius: 8 }}
-              showSearch
-              optionFilterProp="label"
-              options={mcpTools.map((t: any) => ({
-                value: t.name,
-                label: t.name,
-                title: t.description,
-              }))}
-            />
-          )}
-        </Form.Item>
+
+        {config.action === 'call_tool' && (
+          <Form.Item label="Tool">
+            {mcpLoading ? (
+              <Spin size="small" />
+            ) : (
+              <Select
+                value={config.tool_name || undefined}
+                onChange={(v) => updateNodeConfig('mcp.tool_name', v)}
+                placeholder={config.server_url ? 'Select tool' : 'Select a server first'}
+                disabled={!config.server_url}
+                style={{ borderRadius: 8 }}
+                showSearch
+                optionFilterProp="label"
+                options={mcpTools.map((t: any) => ({
+                  value: t.name,
+                  label: t.name,
+                  title: t.description,
+                }))}
+              />
+            )}
+          </Form.Item>
+        )}
+
+        {config.action === 'get_prompt' && (
+          <Form.Item label="Prompt">
+            {mcpLoading ? (
+              <Spin size="small" />
+            ) : (
+              <Select
+                value={config.prompt_name || undefined}
+                onChange={(v) => updateNodeConfig('mcp.prompt_name', v)}
+                placeholder={config.server_url ? 'Select prompt' : 'Select a server first'}
+                disabled={!config.server_url}
+                style={{ borderRadius: 8 }}
+                showSearch
+                optionFilterProp="label"
+                options={mcpPrompts.map((p: any) => ({
+                  value: p.name,
+                  label: p.name,
+                  title: p.description,
+                }))}
+              />
+            )}
+          </Form.Item>
+        )}
+
+        {config.action === 'read_resource' && (
+          <Form.Item label="Resource URI">
+            {mcpLoading ? (
+              <Spin size="small" />
+            ) : (
+              <Select
+                value={config.resource_uri || undefined}
+                onChange={(v) => updateNodeConfig('mcp.resource_uri', v)}
+                placeholder={config.server_url ? 'Select resource' : 'Select a server first'}
+                disabled={!config.server_url}
+                style={{ borderRadius: 8 }}
+                showSearch
+                optionFilterProp="label"
+                options={mcpResources.map((r: any) => ({
+                  value: r.uri,
+                  label: r.name || r.uri,
+                  title: r.description,
+                }))}
+              />
+            )}
+          </Form.Item>
+        )}
+
+        {/* 显示选中项的描述 */}
         {config.tool_name && mcpTools.length > 0 && (() => {
           const tool = mcpTools.find((t: any) => t.name === config.tool_name)
           if (!tool?.description) return null
           return (
             <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
               {tool.description}
-            </div>
-          )
-        })()}
-      </>
-    )
-  }
-
-  // MCP Prompt Panel
-  const renderMCPPromptPanel = () => {
-    const config = (selectedNode?.data as any)?.config?.mcp_prompt || {}
-    return (
-      <>
-        <Form.Item label="MCP Server">
-          <Select
-            value={config.server_url || undefined}
-            onChange={(v) => handleServerChange(v, 'mcp_prompt')}
-            options={serverOptions}
-            placeholder="Select MCP Server"
-            style={{ borderRadius: 8 }}
-            showSearch
-            optionFilterProp="label"
-          />
-        </Form.Item>
-        <Form.Item label="Prompt">
-          {mcpLoading ? (
-            <Spin size="small" />
-          ) : (
-            <Select
-              value={config.prompt_name || undefined}
-              onChange={(v) => updateNodeConfig('mcp_prompt.prompt_name', v)}
-              placeholder={config.server_url ? 'Select prompt' : 'Select a server first'}
-              disabled={!config.server_url}
-              style={{ borderRadius: 8 }}
-              showSearch
-              optionFilterProp="label"
-              options={mcpPrompts.map((p: any) => ({
-                value: p.name,
-                label: p.name,
-                title: p.description,
-              }))}
-            />
-          )}
-        </Form.Item>
-        {config.prompt_name && mcpPrompts.length > 0 && (() => {
-          const prompt = mcpPrompts.find((p: any) => p.name === config.prompt_name)
-          if (!prompt?.description) return null
-          return (
-            <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
-              {prompt.description}
-            </div>
-          )
-        })()}
-      </>
-    )
-  }
-
-  // MCP Resource Panel
-  const renderMCPResourcePanel = () => {
-    const config = (selectedNode?.data as any)?.config?.mcp_resource || {}
-    return (
-      <>
-        <Form.Item label="MCP Server">
-          <Select
-            value={config.server_url || undefined}
-            onChange={(v) => handleServerChange(v, 'mcp_resource')}
-            options={serverOptions}
-            placeholder="Select MCP Server"
-            style={{ borderRadius: 8 }}
-            showSearch
-            optionFilterProp="label"
-          />
-        </Form.Item>
-        <Form.Item label="Resource">
-          {mcpLoading ? (
-            <Spin size="small" />
-          ) : (
-            <Select
-              value={config.uri || undefined}
-              onChange={(v) => updateNodeConfig('mcp_resource.uri', v)}
-              placeholder={config.server_url ? 'Select resource' : 'Select a server first'}
-              disabled={!config.server_url}
-              style={{ borderRadius: 8 }}
-              showSearch
-              optionFilterProp="label"
-              options={mcpResources.map((r: any) => ({
-                value: r.uri,
-                label: r.name || r.uri,
-                title: r.description,
-              }))}
-            />
-          )}
-        </Form.Item>
-        {config.uri && mcpResources.length > 0 && (() => {
-          const resource = mcpResources.find((r: any) => r.uri === config.uri)
-          if (!resource) return null
-          return (
-            <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
-              <div>{resource.description || resource.uri}</div>
-              {resource.mimeType && (
-                <Tag style={{ fontSize: 11, borderRadius: 4, marginTop: 4 }}>{resource.mimeType}</Tag>
+              {tool.inputSchema?.properties && (
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ color: '#98a2b3' }}>Params: </span>
+                  {Object.keys(tool.inputSchema.properties).map((key) => (
+                    <Tag key={key} style={{ fontSize: 11, borderRadius: 4, marginBottom: 2 }}>
+                      {key}
+                      {tool.inputSchema.required?.includes(key) && <span style={{ color: '#f04438' }}>*</span>}
+                    </Tag>
+                  ))}
+                </div>
               )}
             </div>
           )
         })()}
+      </>
+    )
+  }
+
+  // LLM 面板
+  const renderLLMPanel = () => {
+    const config = (selectedNode?.data as any)?.config?.llm || {}
+    return (
+      <>
+        <Form.Item label="Provider (Quick Fill)">
+          <Select
+            value={undefined}
+            onChange={handleLLMProviderChange}
+            placeholder="Select to auto-fill base_url & api_key"
+            style={{ borderRadius: 8 }}
+            allowClear
+            options={llmProviders.map((p) => ({
+              value: p.id,
+              label: p.name,
+            }))}
+          />
+        </Form.Item>
+        <Form.Item label="Base URL">
+          <Input
+            value={config.base_url}
+            onChange={(e) => updateNodeConfig('llm.base_url', e.target.value)}
+            placeholder="https://api.deepseek.com/v1"
+            style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+          />
+        </Form.Item>
+        <Form.Item label="API Key">
+          <Input.Password
+            value={config.api_key}
+            onChange={(e) => updateNodeConfig('llm.api_key', e.target.value)}
+            placeholder="sk-..."
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="Model">
+          <Input
+            value={config.model}
+            onChange={(e) => updateNodeConfig('llm.model', e.target.value)}
+            placeholder="deepseek-chat"
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="System Message">
+          <Input.TextArea
+            value={config.system_msg}
+            onChange={(e) => updateNodeConfig('llm.system_msg', e.target.value)}
+            rows={2}
+            placeholder="Optional system message"
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="Prompt">
+          <Input.TextArea
+            value={config.prompt}
+            onChange={(e) => updateNodeConfig('llm.prompt', e.target.value)}
+            rows={3}
+            placeholder={'Supports {{.input.query}} {{.node_1.content}}'}
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
       </>
     )
   }
@@ -650,70 +693,8 @@ export default function WorkflowEditor() {
 
                 <Divider style={{ margin: '12px 0' }} />
 
-                {(selectedNode.data as any).nodeType === 'llm' && (
-                  <>
-                    <Form.Item label="Base URL">
-                      <Select
-                        value={(selectedNode.data as any).config?.llm?.base_url || undefined}
-                        onChange={(v) => updateNodeConfig('llm.base_url', v)}
-                        placeholder="Select secret for Base URL"
-                        style={{ borderRadius: 8 }}
-                        showSearch
-                        optionFilterProp="label"
-                        options={secrets.map((s) => ({
-                          value: `{{secret.${s.key}}}`,
-                          label: s.key,
-                          title: s.desc,
-                        }))}
-                      />
-                    </Form.Item>
-                    <Form.Item label="API Key">
-                      <Select
-                        value={(selectedNode.data as any).config?.llm?.api_key || undefined}
-                        onChange={(v) => updateNodeConfig('llm.api_key', v)}
-                        placeholder="Select secret for API Key"
-                        style={{ borderRadius: 8 }}
-                        showSearch
-                        optionFilterProp="label"
-                        options={secrets.map((s) => ({
-                          value: `{{secret.${s.key}}}`,
-                          label: s.key,
-                          title: s.desc,
-                        }))}
-                      />
-                    </Form.Item>
-                    <Form.Item label="Model">
-                      <Input
-                        value={(selectedNode.data as any).config?.llm?.model}
-                        onChange={(e) => updateNodeConfig('llm.model', e.target.value)}
-                        placeholder="deepseek-chat"
-                        style={{ borderRadius: 8 }}
-                      />
-                    </Form.Item>
-                    <Form.Item label="System Message">
-                      <Input.TextArea
-                        value={(selectedNode.data as any).config?.llm?.system_msg}
-                        onChange={(e) => updateNodeConfig('llm.system_msg', e.target.value)}
-                        rows={2}
-                        placeholder="Optional system message"
-                        style={{ borderRadius: 8 }}
-                      />
-                    </Form.Item>
-                    <Form.Item label="Prompt">
-                      <Input.TextArea
-                        value={(selectedNode.data as any).config?.llm?.prompt}
-                        onChange={(e) => updateNodeConfig('llm.prompt', e.target.value)}
-                        rows={3}
-                        placeholder="Supports {{input.xxx}} {{secret.xxx}}"
-                        style={{ borderRadius: 8 }}
-                      />
-                    </Form.Item>
-                  </>
-                )}
-
-                {(selectedNode.data as any).nodeType === 'mcp_tool' && renderMCPToolPanel()}
-                {(selectedNode.data as any).nodeType === 'mcp_prompt' && renderMCPPromptPanel()}
-                {(selectedNode.data as any).nodeType === 'mcp_resource' && renderMCPResourcePanel()}
+                {(selectedNode.data as any).nodeType === 'llm' && renderLLMPanel()}
+                {(selectedNode.data as any).nodeType === 'mcp' && renderMCPPanel()}
 
                 {(selectedNode.data as any).nodeType === 'http' && (
                   <>
@@ -757,7 +738,7 @@ export default function WorkflowEditor() {
                       value={(selectedNode.data as any).config?.condition?.expression}
                       onChange={(e) => updateNodeConfig('condition.expression', e.target.value)}
                       rows={2}
-                      placeholder="output.status == 'ok'"
+                      placeholder="status == 'ok'"
                       style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
                     />
                   </Form.Item>

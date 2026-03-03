@@ -5,190 +5,204 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sync/atomic"
-	"time"
 )
 
 type Client struct {
-	httpClient *http.Client
-	idCounter  atomic.Int64
+	http  *http.Client
+	idSeq atomic.Int64
 }
 
 func NewClient() *Client {
-	cl := &Client{
-		httpClient: &http.Client{Timeout: 30 * time.Second},
-	}
-
-	return cl
+	return &Client{http: &http.Client{}}
 }
 
-// JSON-RPC 2.0 请求/响应结构
-type jsonRPCRequest struct {
+// JSON-RPC 2.0 请求/响应
+
+type rpcRequest struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID      int64  `json:"id"`
 	Method  string `json:"method"`
 	Params  any    `json:"params,omitempty"`
 }
 
-type jsonRPCResponse struct {
+type rpcResponse struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      int64           `json:"id"`
 	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *jsonRPCError   `json:"error,omitempty"`
+	Error   *rpcError       `json:"error,omitempty"`
 }
 
-type jsonRPCError struct {
+type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
 
-func (c *Client) call(ctx context.Context, serverURL string, method string, params any, headers map[string]string) (json.RawMessage, error) {
-	reqBody := jsonRPCRequest{
+func (e *rpcError) Error() string {
+	return fmt.Sprintf("rpc error %d: %s", e.Code, e.Message)
+}
+
+func (c *Client) call(ctx context.Context, serverURL, method string, params any, headers map[string]string) (json.RawMessage, error) {
+	req := rpcRequest{
 		JSONRPC: "2.0",
-		ID:      c.idCounter.Add(1),
+		ID:      c.idSeq.Add(1),
 		Method:  method,
 		Params:  params,
 	}
 
-	body, err := json.Marshal(reqBody)
+	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, serverURL, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("create request %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
 	for k, v := range headers {
-		req.Header.Set(k, v)
+		httpReq.Header.Set(k, v)
 	}
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.http.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("send request %w", err)
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 
-	var rpcResp jsonRPCResponse
-	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
-		return nil, fmt.Errorf("decode response %w", err)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var rpcResp rpcResponse
+	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
+		return nil, fmt.Errorf("unmarshal response: %w", err)
+	}
 	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("rpc error(%d) %s", rpcResp.Error.Code, rpcResp.Error.Message)
+		return nil, rpcResp.Error
 	}
-
 	return rpcResp.Result, nil
 }
 
-// Ping 简单健康检查，尝试调用 tools/list 验证连通性
-func (c *Client) Ping(ctx context.Context, serverURL string, headers map[string]string) error {
-	_, err := c.call(ctx, serverURL, "tools/list", nil, headers)
-	return err
-}
-
-// 调用 MCP 工具 (tools/call)
-func (c *Client) CallTool(ctx context.Context, serverURL, toolName string, arguments map[string]any, headers map[string]string) (map[string]any, error) {
+// CallTool 调用 MCP Server 的工具
+func (c *Client) CallTool(ctx context.Context, serverURL, toolName string, args map[string]any, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"name":      toolName,
-		"arguments": arguments,
+		"arguments": args,
 	}
-
-	result, err := c.call(ctx, serverURL, "tools/call", params, headers)
+	raw, err := c.call(ctx, serverURL, "tools/call", params, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out map[string]any
-	if err := json.Unmarshal(result, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal tool result %w", err)
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal tool result: %w", err)
 	}
-	return out, nil
+	return result, nil
 }
 
-// 获取 MCP 提示词 (prompts/get)
-func (c *Client) GetPrompt(ctx context.Context, serverURL, promptName string, arguments map[string]any, headers map[string]string) (map[string]any, error) {
+// GetPrompt 获取 MCP Server 的提示词
+func (c *Client) GetPrompt(ctx context.Context, serverURL, promptName string, args map[string]any, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"name":      promptName,
-		"arguments": arguments,
+		"arguments": args,
 	}
-
-	result, err := c.call(ctx, serverURL, "prompts/get", params, headers)
+	raw, err := c.call(ctx, serverURL, "prompts/get", params, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out map[string]any
-	if err := json.Unmarshal(result, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal prompt result %w", err)
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal prompt result: %w", err)
 	}
-	return out, nil
+	return result, nil
 }
 
-// 读取 MCP 资源 (resources/read)
+// ReadResource 读取 MCP Server 的资源
 func (c *Client) ReadResource(ctx context.Context, serverURL, uri string, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"uri": uri,
 	}
-
-	result, err := c.call(ctx, serverURL, "resources/read", params, headers)
+	raw, err := c.call(ctx, serverURL, "resources/read", params, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out map[string]any
-	if err := json.Unmarshal(result, &out); err != nil {
-		return nil, fmt.Errorf("unmarshal resource result %w", err)
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal resource result: %w", err)
 	}
-	return out, nil
+	return result, nil
 }
 
-// 列出 MCP 工具 (tools/list)
-func (c *Client) ListTools(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "tools/list", nil, headers)
+// ListTools 列出 MCP Server 的所有工具
+func (c *Client) ListTools(ctx context.Context, serverURL string, headers map[string]string) ([]any, error) {
+	raw, err := c.call(ctx, serverURL, "tools/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out struct {
-		Tools []map[string]any `json:"tools"`
+	var resp struct {
+		Tools []any `json:"tools"`
 	}
-	if err := json.Unmarshal(result, &out); err != nil {
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal tools list: %w", err)
 	}
-	return out.Tools, nil
+	return resp.Tools, nil
 }
 
-// 列出 MCP 提示词 (prompts/list)
-func (c *Client) ListPrompts(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "prompts/list", nil, headers)
+// ListPrompts 列出 MCP Server 的所有提示词
+func (c *Client) ListPrompts(ctx context.Context, serverURL string, headers map[string]string) ([]any, error) {
+	raw, err := c.call(ctx, serverURL, "prompts/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out struct {
-		Prompts []map[string]any `json:"prompts"`
+	var resp struct {
+		Prompts []any `json:"prompts"`
 	}
-	if err := json.Unmarshal(result, &out); err != nil {
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal prompts list: %w", err)
 	}
-	return out.Prompts, nil
+	return resp.Prompts, nil
 }
 
-// 列出 MCP 资源 (resources/list)
-func (c *Client) ListResources(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "resources/list", nil, headers)
+// ListResources 列出 MCP Server 的所有资源
+func (c *Client) ListResources(ctx context.Context, serverURL string, headers map[string]string) ([]any, error) {
+	raw, err := c.call(ctx, serverURL, "resources/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}
-
-	var out struct {
-		Resources []map[string]any `json:"resources"`
+	var resp struct {
+		Resources []any `json:"resources"`
 	}
-	if err := json.Unmarshal(result, &out); err != nil {
+	if err := json.Unmarshal(raw, &resp); err != nil {
 		return nil, fmt.Errorf("unmarshal resources list: %w", err)
 	}
-	return out.Resources, nil
+	return resp.Resources, nil
+}
+
+// TestConnection 测试与 MCP Server 的连接，返回能力信息
+func (c *Client) TestConnection(ctx context.Context, serverURL string, headers map[string]string) (map[string]any, error) {
+	raw, err := c.call(ctx, serverURL, "initialize", map[string]any{
+		"protocolVersion": "2024-11-05",
+		"capabilities":    map[string]any{},
+		"clientInfo": map[string]any{
+			"name":    "mcpflow",
+			"version": "1.0.0",
+		},
+	}, headers)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return nil, fmt.Errorf("unmarshal init result: %w", err)
+	}
+	return result, nil
 }

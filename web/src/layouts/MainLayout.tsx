@@ -5,7 +5,7 @@ import {
   HomeOutlined,
   ApartmentOutlined,
   CloudServerOutlined,
-  LockOutlined,
+  RobotOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
@@ -18,7 +18,7 @@ const menuItems = [
   { key: '/workflows', icon: <ApartmentOutlined />, label: 'Workflows' },
   { key: '/executions', icon: <ThunderboltOutlined />, label: 'Executions' },
   { key: '/mcp-servers', icon: <CloudServerOutlined />, label: 'MCP Servers' },
-  { key: '/secrets', icon: <LockOutlined />, label: 'Secrets' },
+  { key: '/llm-providers', icon: <RobotOutlined />, label: 'LLM Providers' },
 ]
 
 export default function MainLayout() {
@@ -27,7 +27,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
 
   const getSelectedKey = () => {
-    if (location.pathname.startsWith('/secrets')) return '/secrets'
+    if (location.pathname.startsWith('/llm-providers')) return '/llm-providers'
     if (location.pathname.startsWith('/mcp-servers')) return '/mcp-servers'
     if (location.pathname === '/executions') return '/executions'
     if (location.pathname.startsWith('/workflows')) return '/workflows'

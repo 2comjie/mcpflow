@@ -29,7 +29,6 @@ import {
   MessageOutlined,
   DatabaseOutlined,
   ReloadOutlined,
-  HeartOutlined,
 } from '@ant-design/icons'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
 
@@ -47,7 +46,6 @@ export default function MCPServerList() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
-  const [healthChecking, setHealthChecking] = useState(false)
   const [form] = Form.useForm()
 
   // detail drawer
@@ -62,7 +60,7 @@ export default function MCPServerList() {
     setLoading(true)
     try {
       const res: any = await mcpServerApi.list()
-      setServers(res.data || [])
+      setServers(Array.isArray(res) ? res : res.data || [])
     } catch (err: any) {
       message.error(err.message)
     } finally {
@@ -127,19 +125,6 @@ export default function MCPServerList() {
       fetchList()
     } catch (err: any) {
       message.error(err.message)
-    }
-  }
-
-  const handleHealthCheckAll = async () => {
-    setHealthChecking(true)
-    try {
-      const res: any = await mcpServerApi.healthCheckAll()
-      setServers(res.data || [])
-      message.success('Health check completed')
-    } catch (err: any) {
-      message.error(err.message)
-    } finally {
-      setHealthChecking(false)
     }
   }
 
@@ -269,16 +254,6 @@ export default function MCPServerList() {
           </div>
         </div>
         <Space>
-          <Tooltip title="Check all servers health">
-            <Button
-              icon={<HeartOutlined />}
-              onClick={handleHealthCheckAll}
-              loading={healthChecking}
-              style={{ borderRadius: 10 }}
-            >
-              Health Check
-            </Button>
-          </Tooltip>
           <Button
             type="primary"
             icon={<PlusOutlined />}

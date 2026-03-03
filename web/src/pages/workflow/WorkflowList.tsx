@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Row, Col, Tag, Dropdown, message, Input } from 'antd'
+import { Button, Row, Col, Dropdown, message, Input } from 'antd'
 import {
   PlusOutlined,
   SearchOutlined,
@@ -50,7 +50,7 @@ export default function WorkflowList() {
   const handleExecute = async (id: number) => {
     try {
       const res: any = await workflowApi.execute(id)
-      message.success(`Executed, status: ${res.status}`)
+      message.success(`Execution started: #${res.execution_id}`)
     } catch (err: any) {
       message.error(err.message)
     }
@@ -155,12 +155,6 @@ export default function WorkflowList() {
                   <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {w.name || 'Untitled'}
                   </span>
-                  <Tag
-                    color={w.status === 'active' ? 'green' : 'default'}
-                    style={{ margin: 0, borderRadius: 4, fontSize: 11 }}
-                  >
-                    {w.status === 'active' ? 'Active' : 'Draft'}
-                  </Tag>
                 </div>
 
                 <div className="workflow-card-desc">

@@ -38,11 +38,10 @@ export interface ExecutionLog {
 }
 
 export const executionApi = {
-  list: (page = 1, pageSize = 20) =>
-    request.get('/executions', { params: { page, page_size: pageSize } }),
+  list: (page = 1, size = 20) =>
+    request.get('/executions', { params: { page, size } }),
   get: (id: number) => request.get(`/executions/${id}`),
   logs: (id: number) => request.get(`/executions/${id}/logs`),
-  cancel: (id: number) => request.post(`/executions/${id}/cancel`),
-  listByWorkflow: (workflowId: number, page = 1, pageSize = 20) =>
-    request.get(`/workflows/${workflowId}/executions`, { params: { page, page_size: pageSize } }),
+  listByWorkflow: (workflowId: number, page = 1, size = 20) =>
+    request.get(`/workflows/${workflowId}/executions`, { params: { page, size } }),
 }
