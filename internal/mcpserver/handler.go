@@ -29,10 +29,12 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		g.POST("", h.Create)
 		g.GET("", h.List)
+		g.POST("/health-check", h.HealthCheckAll)
 		g.GET("/:id", h.Get)
 		g.PUT("/:id", h.Update)
 		g.DELETE("/:id", h.Delete)
 		g.POST("/:id/test", h.TestConnection)
+		g.POST("/:id/ping", h.HealthCheck)
 		g.GET("/:id/tools", h.GetTools)
 		g.GET("/:id/prompts", h.GetPrompts)
 		g.GET("/:id/resources", h.GetResources)
@@ -154,4 +156,27 @@ func (h *Handler) GetResources(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"resources": resources})
+}
+
+// HealthCheck 单个服务器健康检查
+func (h *Handler) HealthCheck(c *gin.Context) {
+	id, ok := parseID(c)
+	if !ok {
+		return
+	}
+	if err := h.svc.HealthCheck(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusOK, gin.H{"status": "inactive", "error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "active"})
+}
+
+// HealthCheckAll 批量健康检查所有服务器
+func (h *Handler) HealthCheckAll(c *gin.Context) {
+	servers, err := h.svc.HealthCheckAll(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": servers})
 }

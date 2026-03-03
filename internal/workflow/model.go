@@ -182,16 +182,18 @@ type NodeConfig struct {
 
 // MCP工具调用配置
 type MCPToolConfig struct {
-	ServerURL string         `json:"server_url"`
-	ToolName  string         `json:"tool_name"`
-	Arguments map[string]any `json:"arguments,omitempty"`
+	ServerURL string            `json:"server_url"`
+	ToolName  string            `json:"tool_name"`
+	Arguments map[string]any    `json:"arguments,omitempty"`
+	Headers   map[string]string `json:"headers,omitempty"` // 自定义请求头
 }
 
 // MCP提示词配置
 type MCPPromptConfig struct {
-	ServerURL  string         `json:"server_url"`
-	PromptName string         `json:"prompt_name"`
-	Arguments  map[string]any `json:"arguments,omitempty"`
+	ServerURL  string            `json:"server_url"`
+	PromptName string            `json:"prompt_name"`
+	Arguments  map[string]any    `json:"arguments,omitempty"`
+	Headers    map[string]string `json:"headers,omitempty"` // 自定义请求头
 }
 
 // LLM调用配置
@@ -208,8 +210,9 @@ type LLMConfig struct {
 
 // MCP资源读取配置
 type MCPResourceConfig struct {
-	ServerURL string `json:"server_url"`
-	URI       string `json:"uri"`
+	ServerURL string            `json:"server_url"`
+	URI       string            `json:"uri"`
+	Headers   map[string]string `json:"headers,omitempty"` // 自定义请求头
 }
 
 // 条件分支配置

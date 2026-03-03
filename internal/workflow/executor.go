@@ -85,8 +85,7 @@ func (e *MCPToolExecutor) Execute(ctx context.Context, node *Node, input map[str
 	if cfg == nil {
 		return nil, fmt.Errorf("mcp_tool config is nil")
 	}
-	// 调用mcp server 的 tools/call
-	return e.client.CallTool(ctx, cfg.ServerURL, cfg.ToolName, cfg.Arguments)
+	return e.client.CallTool(ctx, cfg.ServerURL, cfg.ToolName, cfg.Arguments, cfg.Headers)
 }
 
 type MCPPromptExecutor struct {
@@ -98,7 +97,7 @@ func (e *MCPPromptExecutor) Execute(ctx context.Context, node *Node, input map[s
 	if cfg == nil {
 		return nil, fmt.Errorf("mcp_prompt config is nil")
 	}
-	return e.client.GetPrompt(ctx, cfg.ServerURL, cfg.PromptName, cfg.Arguments)
+	return e.client.GetPrompt(ctx, cfg.ServerURL, cfg.PromptName, cfg.Arguments, cfg.Headers)
 }
 
 type MCPResourceExecutor struct {
@@ -110,7 +109,7 @@ func (e *MCPResourceExecutor) Execute(ctx context.Context, node *Node, input map
 	if cfg == nil {
 		return nil, fmt.Errorf("mcp_resource config is nil")
 	}
-	return e.client.ReadResource(ctx, cfg.ServerURL, cfg.URI)
+	return e.client.ReadResource(ctx, cfg.ServerURL, cfg.URI, cfg.Headers)
 }
 
 // ==================== LLM ====================

@@ -43,7 +43,7 @@ type jsonRPCError struct {
 	Message string `json:"message"`
 }
 
-func (c *Client) call(ctx context.Context, serverURL string, method string, params any) (json.RawMessage, error) {
+func (c *Client) call(ctx context.Context, serverURL string, method string, params any, headers map[string]string) (json.RawMessage, error) {
 	reqBody := jsonRPCRequest{
 		JSONRPC: "2.0",
 		ID:      c.idCounter.Add(1),
@@ -61,6 +61,9 @@ func (c *Client) call(ctx context.Context, serverURL string, method string, para
 		return nil, fmt.Errorf("create request %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -80,14 +83,20 @@ func (c *Client) call(ctx context.Context, serverURL string, method string, para
 	return rpcResp.Result, nil
 }
 
+// Ping 简单健康检查，尝试调用 tools/list 验证连通性
+func (c *Client) Ping(ctx context.Context, serverURL string, headers map[string]string) error {
+	_, err := c.call(ctx, serverURL, "tools/list", nil, headers)
+	return err
+}
+
 // 调用 MCP 工具 (tools/call)
-func (c *Client) CallTool(ctx context.Context, serverURL, toolName string, arguments map[string]any) (map[string]any, error) {
+func (c *Client) CallTool(ctx context.Context, serverURL, toolName string, arguments map[string]any, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"name":      toolName,
 		"arguments": arguments,
 	}
 
-	result, err := c.call(ctx, serverURL, "tools/call", params)
+	result, err := c.call(ctx, serverURL, "tools/call", params, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -100,13 +109,13 @@ func (c *Client) CallTool(ctx context.Context, serverURL, toolName string, argum
 }
 
 // 获取 MCP 提示词 (prompts/get)
-func (c *Client) GetPrompt(ctx context.Context, serverURL, promptName string, arguments map[string]any) (map[string]any, error) {
+func (c *Client) GetPrompt(ctx context.Context, serverURL, promptName string, arguments map[string]any, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"name":      promptName,
 		"arguments": arguments,
 	}
 
-	result, err := c.call(ctx, serverURL, "prompts/get", params)
+	result, err := c.call(ctx, serverURL, "prompts/get", params, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -119,12 +128,12 @@ func (c *Client) GetPrompt(ctx context.Context, serverURL, promptName string, ar
 }
 
 // 读取 MCP 资源 (resources/read)
-func (c *Client) ReadResource(ctx context.Context, serverURL, uri string) (map[string]any, error) {
+func (c *Client) ReadResource(ctx context.Context, serverURL, uri string, headers map[string]string) (map[string]any, error) {
 	params := map[string]any{
 		"uri": uri,
 	}
 
-	result, err := c.call(ctx, serverURL, "resources/read", params)
+	result, err := c.call(ctx, serverURL, "resources/read", params, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -137,8 +146,8 @@ func (c *Client) ReadResource(ctx context.Context, serverURL, uri string) (map[s
 }
 
 // 列出 MCP 工具 (tools/list)
-func (c *Client) ListTools(ctx context.Context, serverURL string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "tools/list", nil)
+func (c *Client) ListTools(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
+	result, err := c.call(ctx, serverURL, "tools/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -153,8 +162,8 @@ func (c *Client) ListTools(ctx context.Context, serverURL string) ([]map[string]
 }
 
 // 列出 MCP 提示词 (prompts/list)
-func (c *Client) ListPrompts(ctx context.Context, serverURL string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "prompts/list", nil)
+func (c *Client) ListPrompts(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
+	result, err := c.call(ctx, serverURL, "prompts/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -169,8 +178,8 @@ func (c *Client) ListPrompts(ctx context.Context, serverURL string) ([]map[strin
 }
 
 // 列出 MCP 资源 (resources/list)
-func (c *Client) ListResources(ctx context.Context, serverURL string) ([]map[string]any, error) {
-	result, err := c.call(ctx, serverURL, "resources/list", nil)
+func (c *Client) ListResources(ctx context.Context, serverURL string, headers map[string]string) ([]map[string]any, error) {
+	result, err := c.call(ctx, serverURL, "resources/list", nil, headers)
 	if err != nil {
 		return nil, err
 	}

@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"gorm.io/gorm"
@@ -45,37 +46,95 @@ func (s *Service) GetByID(ctx context.Context, id uint) (*MCPServer, error) {
 }
 
 func (s *Service) Update(ctx context.Context, server *MCPServer) error {
-	return s.db.WithContext(ctx).Model(server).Select("name", "description", "url").Updates(server).Error
+	return s.db.WithContext(ctx).Model(server).Select("name", "description", "url", "headers").Updates(server).Error
 }
 
 func (s *Service) Delete(ctx context.Context, id uint) error {
 	return s.db.WithContext(ctx).Delete(&MCPServer{}, id).Error
 }
 
-// TestConnection 测试连接并获取工具列表
 func (s *Service) TestConnection(ctx context.Context, id uint) ([]map[string]any, error) {
 	server, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	headers := server.GetHeadersMap()
 
-	tools, err := s.mcpClient.ListTools(ctx, server.URL)
+	tools, err := s.mcpClient.ListTools(ctx, server.URL, headers)
 	if err != nil {
-		// 标记为 inactive
-		s.db.WithContext(ctx).Model(server).Update("status", "inactive")
+		now := time.Now()
+		s.db.WithContext(ctx).Model(server).Updates(map[string]any{
+			"status":     "inactive",
+			"checked_at": &now,
+		})
 		return nil, fmt.Errorf("connection failed: %w", err)
 	}
 
-	// 连接成功，缓存工具列表，标记 active
-	s.db.WithContext(ctx).Model(server).Updates(map[string]any{
-		"status": "active",
-		"tools":  map[string]any{"tools": tools},
-	})
+	// 连接成功，同时尝试获取 prompts 和 resources
+	now := time.Now()
+	updates := map[string]any{
+		"status":     "active",
+		"tools":      map[string]any{"tools": tools},
+		"checked_at": &now,
+	}
 
+	if prompts, err := s.mcpClient.ListPrompts(ctx, server.URL, headers); err == nil {
+		updates["prompts"] = map[string]any{"prompts": prompts}
+	}
+	if resources, err := s.mcpClient.ListResources(ctx, server.URL, headers); err == nil {
+		updates["resources"] = map[string]any{"resources": resources}
+	}
+
+	s.db.WithContext(ctx).Model(server).Updates(updates)
 	return tools, nil
 }
 
-// GetTools 获取某个 MCP Server 的工具列表（优先用缓存）
+func (s *Service) HealthCheck(ctx context.Context, id uint) error {
+	server, err := s.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	headers := server.GetHeadersMap()
+
+	now := time.Now()
+	if err := s.mcpClient.Ping(ctx, server.URL, headers); err != nil {
+		s.db.WithContext(ctx).Model(server).Updates(map[string]any{
+			"status":     "inactive",
+			"checked_at": &now,
+		})
+		return fmt.Errorf("health check failed: %w", err)
+	}
+
+	s.db.WithContext(ctx).Model(server).Updates(map[string]any{
+		"status":     "active",
+		"checked_at": &now,
+	})
+	return nil
+}
+
+func (s *Service) HealthCheckAll(ctx context.Context) ([]MCPServer, error) {
+	servers, err := s.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range servers {
+		srv := &servers[i]
+		headers := srv.GetHeadersMap()
+		now := time.Now()
+		if err := s.mcpClient.Ping(ctx, srv.URL, headers); err != nil {
+			srv.Status = "inactive"
+		} else {
+			srv.Status = "active"
+		}
+		srv.CheckedAt = &now
+		s.db.WithContext(ctx).Model(srv).Updates(map[string]any{
+			"status":     srv.Status,
+			"checked_at": &now,
+		})
+	}
+	return servers, nil
+}
+
 func (s *Service) GetTools(ctx context.Context, id uint) ([]map[string]any, error) {
 	server, err := s.GetByID(ctx, id)
 	if err != nil {
@@ -83,38 +142,71 @@ func (s *Service) GetTools(ctx context.Context, id uint) ([]map[string]any, erro
 	}
 
 	// 尝试从缓存获取
-	if server.Tools != nil {
-		if tools, ok := server.Tools["tools"]; ok {
-			if list, ok := tools.([]any); ok {
-				result := make([]map[string]any, 0, len(list))
-				for _, item := range list {
-					if m, ok := item.(map[string]any); ok {
-						result = append(result, m)
-					}
-				}
-				return result, nil
-			}
-		}
+	if cached := extractCachedList(server.Tools, "tools"); cached != nil {
+		return cached, nil
 	}
 
 	// 缓存没有就实时获取
 	return s.TestConnection(ctx, id)
 }
 
-// GetPrompts 获取某个 MCP Server 的提示词列表
 func (s *Service) GetPrompts(ctx context.Context, id uint) ([]map[string]any, error) {
 	server, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.mcpClient.ListPrompts(ctx, server.URL)
+
+	if cached := extractCachedList(server.Prompts, "prompts"); cached != nil {
+		return cached, nil
+	}
+
+	headers := server.GetHeadersMap()
+	prompts, err := s.mcpClient.ListPrompts(ctx, server.URL, headers)
+	if err != nil {
+		return nil, err
+	}
+	// 缓存结果
+	s.db.WithContext(ctx).Model(server).Update("prompts", map[string]any{"prompts": prompts})
+	return prompts, nil
 }
 
-// GetResources 获取某个 MCP Server 的资源列表
 func (s *Service) GetResources(ctx context.Context, id uint) ([]map[string]any, error) {
 	server, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return s.mcpClient.ListResources(ctx, server.URL)
+
+	if cached := extractCachedList(server.Resources, "resources"); cached != nil {
+		return cached, nil
+	}
+
+	headers := server.GetHeadersMap()
+	resources, err := s.mcpClient.ListResources(ctx, server.URL, headers)
+	if err != nil {
+		return nil, err
+	}
+	// 缓存结果
+	s.db.WithContext(ctx).Model(server).Update("resources", map[string]any{"resources": resources})
+	return resources, nil
+}
+
+func extractCachedList(cache map[string]any, key string) []map[string]any {
+	if cache == nil {
+		return nil
+	}
+	items, ok := cache[key]
+	if !ok {
+		return nil
+	}
+	list, ok := items.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]any, 0, len(list))
+	for _, item := range list {
+		if m, ok := item.(map[string]any); ok {
+			result = append(result, m)
+		}
+	}
+	return result
 }
