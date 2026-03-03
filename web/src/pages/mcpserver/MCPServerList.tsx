@@ -19,6 +19,7 @@ import {
 } from 'antd'
 import {
   PlusOutlined,
+  MinusCircleOutlined,
   CloudServerOutlined,
   EditOutlined,
   DeleteOutlined,
@@ -28,8 +29,17 @@ import {
   MessageOutlined,
   DatabaseOutlined,
   ReloadOutlined,
+  HeartOutlined,
 } from '@ant-design/icons'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
+
+const formatDateTime = (v: string) => {
+  if (!v) return '-'
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return v
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
 
 export default function MCPServerList() {
   const [servers, setServers] = useState<MCPServer[]>([])
@@ -37,6 +47,7 @@ export default function MCPServerList() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
+  const [healthChecking, setHealthChecking] = useState(false)
   const [form] = Form.useForm()
 
   // detail drawer
@@ -65,12 +76,23 @@ export default function MCPServerList() {
 
   const handleSubmit = async () => {
     const values = await form.validateFields()
+    // 把 headersList [{key, value}] 转成 headers map
+    const { headersList, ...rest } = values
+    const headers: Record<string, string> = {}
+    if (headersList) {
+      for (const item of headersList) {
+        if (item?.key && item?.value) {
+          headers[item.key] = item.value
+        }
+      }
+    }
+    const payload = { ...rest, headers: Object.keys(headers).length > 0 ? headers : undefined }
     try {
       if (editId) {
-        await mcpServerApi.update(editId, values)
+        await mcpServerApi.update(editId, payload)
         message.success('Updated')
       } else {
-        await mcpServerApi.create(values)
+        await mcpServerApi.create(payload)
         message.success('Created')
       }
       setModalOpen(false)
@@ -84,7 +106,11 @@ export default function MCPServerList() {
 
   const handleEdit = (record: MCPServer) => {
     setEditId(record.id)
-    form.setFieldsValue(record)
+    // 把 headers map 转成 headersList [{key, value}]
+    const headersList = record.headers
+      ? Object.entries(record.headers).map(([key, value]) => ({ key, value }))
+      : []
+    form.setFieldsValue({ ...record, headersList })
     setModalOpen(true)
   }
 
@@ -101,6 +127,19 @@ export default function MCPServerList() {
       fetchList()
     } catch (err: any) {
       message.error(err.message)
+    }
+  }
+
+  const handleHealthCheckAll = async () => {
+    setHealthChecking(true)
+    try {
+      const res: any = await mcpServerApi.healthCheckAll()
+      setServers(res.data || [])
+      message.success('Health check completed')
+    } catch (err: any) {
+      message.error(err.message)
+    } finally {
+      setHealthChecking(false)
     }
   }
 
@@ -229,6 +268,30 @@ export default function MCPServerList() {
             Manage your Model Context Protocol service connections
           </div>
         </div>
+        <Space>
+          <Tooltip title="Check all servers health">
+            <Button
+              icon={<HeartOutlined />}
+              onClick={handleHealthCheckAll}
+              loading={healthChecking}
+              style={{ borderRadius: 10 }}
+            >
+              Health Check
+            </Button>
+          </Tooltip>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditId(null)
+              form.resetFields()
+              setModalOpen(true)
+            }}
+            style={{ borderRadius: 10 }}
+          >
+            Add Server
+          </Button>
+        </Space>
       </div>
 
       {servers.length > 0 && (
@@ -270,20 +333,6 @@ export default function MCPServerList() {
               ? 'Try different keywords'
               : 'Add your first MCP server to use tools and resources in your workflows'}
           </div>
-          {!search && (
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => {
-                setEditId(null)
-                form.resetFields()
-                setModalOpen(true)
-              }}
-              style={{ borderRadius: 10 }}
-            >
-              Add Server
-            </Button>
-          )}
         </div>
       ) : (
         <Row gutter={[16, 16]}>
@@ -408,7 +457,19 @@ export default function MCPServerList() {
               {detailServer.description && (
                 <Descriptions.Item label="Description">{detailServer.description}</Descriptions.Item>
               )}
-              <Descriptions.Item label="Created">{detailServer.created_at}</Descriptions.Item>
+              {detailServer.headers && Object.keys(detailServer.headers).length > 0 && (
+                <Descriptions.Item label="Headers">
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {Object.keys(detailServer.headers).map((k) => (
+                      <Tag key={k} style={{ fontSize: 11, borderRadius: 4 }}>{k}</Tag>
+                    ))}
+                  </div>
+                </Descriptions.Item>
+              )}
+              {detailServer.checked_at && (
+                <Descriptions.Item label="Last Check">{formatDateTime(detailServer.checked_at)}</Descriptions.Item>
+              )}
+              <Descriptions.Item label="Created">{formatDateTime(detailServer.created_at)}</Descriptions.Item>
             </Descriptions>
 
             {detailLoading ? (
@@ -501,10 +562,53 @@ export default function MCPServerList() {
             label="URL"
             rules={[{ required: true, message: 'Please enter the server URL' }]}
           >
-            <Input placeholder="http://localhost:3001/sse" style={{ borderRadius: 8 }} />
+            <Input placeholder="http://localhost:3001/mcp" style={{ borderRadius: 8 }} />
           </Form.Item>
           <Form.Item name="description" label="Description">
             <Input.TextArea rows={2} placeholder="Optional description" style={{ borderRadius: 8 }} />
+          </Form.Item>
+          <Form.Item label="Headers" style={{ marginBottom: 0 }}>
+            <Form.List name="headersList">
+              {(fields, { add, remove }) => (
+                <>
+                  {fields.map(({ key, name, ...restField }) => (
+                    <div key={key} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'key']}
+                        style={{ flex: 1, marginBottom: 0 }}
+                        rules={[{ required: true, message: 'Key' }]}
+                      >
+                        <Input placeholder="Header name" style={{ borderRadius: 8 }} />
+                      </Form.Item>
+                      <Form.Item
+                        {...restField}
+                        name={[name, 'value']}
+                        style={{ flex: 1, marginBottom: 0 }}
+                        rules={[{ required: true, message: 'Value' }]}
+                      >
+                        <Input placeholder="Header value" style={{ borderRadius: 8 }} />
+                      </Form.Item>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<MinusCircleOutlined />}
+                        onClick={() => remove(name)}
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    onClick={() => add()}
+                    block
+                    icon={<PlusOutlined />}
+                    style={{ borderRadius: 8 }}
+                  >
+                    Add Header
+                  </Button>
+                </>
+              )}
+            </Form.List>
           </Form.Item>
         </Form>
       </Modal>

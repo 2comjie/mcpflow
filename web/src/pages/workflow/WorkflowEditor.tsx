@@ -176,7 +176,7 @@ export default function WorkflowEditor() {
   }, [selectedNode?.id])
 
   const isValidConnection = useCallback(
-    (connection: Connection) => {
+    (connection: Connection | FlowEdge) => {
       const sourceNode = nodes.find((n) => n.id === connection.source)
       const targetNode = nodes.find((n) => n.id === connection.target)
       if (!sourceNode || !targetNode) return false
@@ -320,6 +320,13 @@ export default function WorkflowEditor() {
 
   const handleServerChange = (serverUrl: string, configPrefix: string) => {
     updateNodeConfig(`${configPrefix}.server_url`, serverUrl)
+    // 自动填充选中服务器的 headers
+    const server = mcpServers.find((s) => s.url === serverUrl)
+    if (server?.headers && Object.keys(server.headers).length > 0) {
+      updateNodeConfig(`${configPrefix}.headers`, server.headers)
+    } else {
+      updateNodeConfig(`${configPrefix}.headers`, undefined)
+    }
     // 清除之前选中的 tool/prompt/resource
     if (configPrefix === 'mcp_tool') {
       updateNodeConfig('mcp_tool.tool_name', '')

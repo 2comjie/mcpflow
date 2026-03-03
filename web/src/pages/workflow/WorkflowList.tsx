@@ -82,6 +82,14 @@ export default function WorkflowList() {
             Create and manage your automation workflows
           </div>
         </div>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => navigate('/workflows/new')}
+          style={{ borderRadius: 10 }}
+        >
+          New Workflow
+        </Button>
       </div>
 
       {workflows.length > 0 && (

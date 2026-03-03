@@ -11,6 +11,14 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { executionApi, type Execution, type ExecutionLog } from '../../api/execution'
 
+const formatDateTime = (v: string) => {
+  if (!v) return '-'
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return v
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
 const statusTag = (status: string) => {
   const map: Record<string, { color: string; icon: React.ReactNode }> = {
     completed: { color: 'success', icon: <CheckCircleOutlined /> },
@@ -101,13 +109,13 @@ export default function AllExecutions() {
       title: 'Started',
       dataIndex: 'started_at',
       width: 180,
-      render: (v: string) => v || '-',
+      render: (v: string) => formatDateTime(v),
     },
     {
       title: 'Finished',
       dataIndex: 'finished_at',
       width: 180,
-      render: (v: string) => v || '-',
+      render: (v: string) => formatDateTime(v),
     },
     {
       title: 'Error',
@@ -186,8 +194,8 @@ export default function AllExecutions() {
                 </Button>
               </Descriptions.Item>
               <Descriptions.Item label="Status">{statusTag(detail.status)}</Descriptions.Item>
-              <Descriptions.Item label="Started">{detail.started_at || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Finished">{detail.finished_at || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Started">{formatDateTime(detail.started_at)}</Descriptions.Item>
+              <Descriptions.Item label="Finished">{formatDateTime(detail.finished_at)}</Descriptions.Item>
               {detail.error && (
                 <Descriptions.Item label="Error">
                   <span style={{ color: '#f04438' }}>{detail.error}</span>
