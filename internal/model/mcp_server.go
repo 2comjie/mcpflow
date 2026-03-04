@@ -1,20 +1,24 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/2comjie/mcpflow/pkg/types"
+)
 
 type MCPServer struct {
-	ID          uint       `json:"id" gorm:"primaryKey"`
-	Name        string     `json:"name" gorm:"size:255;not null"`
-	Description string     `json:"description" gorm:"type:text"`
-	URL         string     `json:"url" gorm:"size:512;not null"`
-	Headers     JSON       `json:"headers" gorm:"type:json"`
-	Status      string     `json:"status" gorm:"size:20;default:active"`
-	Tools       JSON       `json:"tools" gorm:"type:json"`
-	Prompts     JSON       `json:"prompts" gorm:"type:json"`
-	Resources   JSON       `json:"resources" gorm:"type:json"`
-	CheckedAt   *time.Time `json:"checked_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID          uint          `json:"id" gorm:"primaryKey"`
+	Name        string        `json:"name" gorm:"size:255;not null"`
+	Description string        `json:"description" gorm:"type:text"`
+	URL         string        `json:"url" gorm:"size:512;not null"`
+	Headers     JSON          `json:"headers" gorm:"type:json"`
+	Status      string        `json:"status" gorm:"size:20;default:inactive"`
+	Tools       types.JSONRaw `json:"tools" gorm:"type:json"`
+	Prompts     types.JSONRaw `json:"prompts" gorm:"type:json"`
+	Resources   types.JSONRaw `json:"resources" gorm:"type:json"`
+	CheckedAt   *time.Time    `json:"checked_at"`
+	CreatedAt   time.Time     `json:"created_at"`
+	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
 func (MCPServer) TableName() string { return "mcp_servers" }

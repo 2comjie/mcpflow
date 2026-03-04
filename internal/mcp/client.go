@@ -188,7 +188,9 @@ func (c *Client) ListResources(ctx context.Context, serverURL string, headers ma
 }
 
 // TestConnection 测试与 MCP Server 的连接，返回能力信息
+// 优先使用 initialize（MCP 协议标准），失败则降级到 tools/list 探测
 func (c *Client) TestConnection(ctx context.Context, serverURL string, headers map[string]string) (map[string]any, error) {
+	// 尝试标准 initialize
 	raw, err := c.call(ctx, serverURL, "initialize", map[string]any{
 		"protocolVersion": "2024-11-05",
 		"capabilities":    map[string]any{},
@@ -197,12 +199,21 @@ func (c *Client) TestConnection(ctx context.Context, serverURL string, headers m
 			"version": "1.0.0",
 		},
 	}, headers)
+	if err == nil {
+		var result map[string]any
+		if e := json.Unmarshal(raw, &result); e == nil {
+			return result, nil
+		}
+	}
+
+	// 降级：尝试 tools/list 探测连通性
+	raw, err = c.call(ctx, serverURL, "tools/list", nil, headers)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("server unreachable: %w", err)
 	}
 	var result map[string]any
 	if err := json.Unmarshal(raw, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal init result: %w", err)
+		return nil, fmt.Errorf("unmarshal fallback result: %w", err)
 	}
 	return result, nil
 }

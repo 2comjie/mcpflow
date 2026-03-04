@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,7 +119,9 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 			a.store.CreateLog(log)
 		}
 
-		result, err := a.engine.Run(c.Request.Context(), wf, input, logFn)
+		// 使用独立 context，避免 HTTP 请求结束后 context 被取消
+		ctx := context.Background()
+		result, err := a.engine.Run(ctx, wf, input, logFn)
 
 		finished := time.Now()
 		updates := map[string]any{"finished_at": finished}

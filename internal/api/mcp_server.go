@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
+	"github.com/2comjie/mcpflow/pkg/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -79,6 +80,8 @@ func (a *API) TestMCPServer(c *gin.Context) {
 
 	// 测试连接
 	if _, err := a.mcp.TestConnection(c.Request.Context(), srv.URL, headers); err != nil {
+		now := time.Now()
+		a.store.UpdateMCPServerCache(srv.ID, map[string]any{"status": "inactive", "checked_at": now})
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
@@ -91,9 +94,9 @@ func (a *API) TestMCPServer(c *gin.Context) {
 	now := time.Now()
 	updates := map[string]any{
 		"status":     "active",
-		"tools":      tools,
-		"prompts":    prompts,
-		"resources":  resources,
+		"tools":      types.MustJSONRaw(tools),
+		"prompts":    types.MustJSONRaw(prompts),
+		"resources":  types.MustJSONRaw(resources),
 		"checked_at": now,
 	}
 	a.store.UpdateMCPServerCache(srv.ID, updates)
@@ -119,7 +122,7 @@ func (a *API) GetMCPServerTools(c *gin.Context) {
 	}
 
 	// 优先返回缓存
-	if srv.Tools != nil {
+	if len(srv.Tools) > 0 && string(srv.Tools) != "null" {
 		c.JSON(http.StatusOK, srv.Tools)
 		return
 	}
@@ -130,7 +133,7 @@ func (a *API) GetMCPServerTools(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"tools": tools})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"tools": types.MustJSONRaw(tools)})
 	c.JSON(http.StatusOK, tools)
 }
 
@@ -146,7 +149,7 @@ func (a *API) GetMCPServerPrompts(c *gin.Context) {
 		return
 	}
 
-	if srv.Prompts != nil {
+	if len(srv.Prompts) > 0 && string(srv.Prompts) != "null" {
 		c.JSON(http.StatusOK, srv.Prompts)
 		return
 	}
@@ -157,7 +160,7 @@ func (a *API) GetMCPServerPrompts(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"prompts": prompts})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"prompts": types.MustJSONRaw(prompts)})
 	c.JSON(http.StatusOK, prompts)
 }
 
@@ -173,7 +176,7 @@ func (a *API) GetMCPServerResources(c *gin.Context) {
 		return
 	}
 
-	if srv.Resources != nil {
+	if len(srv.Resources) > 0 && string(srv.Resources) != "null" {
 		c.JSON(http.StatusOK, srv.Resources)
 		return
 	}
@@ -184,6 +187,6 @@ func (a *API) GetMCPServerResources(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"resources": resources})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"resources": types.MustJSONRaw(resources)})
 	c.JSON(http.StatusOK, resources)
 }
