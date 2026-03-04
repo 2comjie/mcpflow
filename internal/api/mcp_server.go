@@ -43,6 +43,11 @@ func (a *API) UpdateMCPServer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	for _, key := range []string{"tools", "prompts", "resources"} {
+		if v, ok := updates[key]; ok {
+			updates[key] = types.MustJSONRaw(v)
+		}
+	}
 	if err := a.store.UpdateMCPServer(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -122,7 +127,7 @@ func (a *API) GetMCPServerTools(c *gin.Context) {
 	}
 
 	// 优先返回缓存
-	if len(srv.Tools) > 0 && string(srv.Tools) != "null" {
+	if !srv.Tools.IsEmpty() {
 		c.JSON(http.StatusOK, srv.Tools)
 		return
 	}
@@ -149,7 +154,7 @@ func (a *API) GetMCPServerPrompts(c *gin.Context) {
 		return
 	}
 
-	if len(srv.Prompts) > 0 && string(srv.Prompts) != "null" {
+	if !srv.Prompts.IsEmpty() {
 		c.JSON(http.StatusOK, srv.Prompts)
 		return
 	}
@@ -176,7 +181,7 @@ func (a *API) GetMCPServerResources(c *gin.Context) {
 		return
 	}
 
-	if len(srv.Resources) > 0 && string(srv.Resources) != "null" {
+	if !srv.Resources.IsEmpty() {
 		c.JSON(http.StatusOK, srv.Resources)
 		return
 	}

@@ -41,6 +41,12 @@ func (j *JSONRaw) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// IsEmpty 判断 JSONRaw 是否为空值（nil、空、"null"、"[]"）
+func (j JSONRaw) IsEmpty() bool {
+	s := string(j)
+	return len(j) == 0 || s == "null" || s == "[]"
+}
+
 // MustJSONRaw 将任意值序列化为 JSONRaw，用于 GORM map 更新
 func MustJSONRaw(v any) JSONRaw {
 	b, _ := json.Marshal(v)
