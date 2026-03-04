@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
 )
 
@@ -44,4 +45,26 @@ func (a *API) GetExecutionLogs(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, logs)
+}
+
+func (a *API) DeleteExecution(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	exec, err := a.store.GetExecution(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "execution not found"})
+		return
+	}
+	if exec.Status == model.ExecRunning {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete running execution"})
+		return
+	}
+	if err := a.store.DeleteExecution(uint(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }

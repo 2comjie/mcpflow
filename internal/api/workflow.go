@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
+	"github.com/2comjie/mcpflow/pkg/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -58,6 +60,12 @@ func (a *API) UpdateWorkflow(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+	// nodes 和 edges 是自定义 GORM 类型，通过 map 更新时需要预序列化
+	for _, key := range []string{"nodes", "edges"} {
+		if v, ok := updates[key]; ok {
+			updates[key] = types.MustJSONRaw(v)
+		}
 	}
 	if err := a.store.UpdateWorkflow(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -112,11 +120,15 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 
 	// 后台执行
 	go func() {
-		a.store.UpdateExecution(exec.ID, map[string]any{"status": model.ExecRunning})
+		if err := a.store.UpdateExecution(exec.ID, map[string]any{"status": model.ExecRunning}); err != nil {
+			log.Printf("update execution %d to running failed: %v", exec.ID, err)
+		}
 
-		logFn := func(log *model.ExecutionLog) {
-			log.ExecutionID = exec.ID
-			a.store.CreateLog(log)
+		logFn := func(el *model.ExecutionLog) {
+			el.ExecutionID = exec.ID
+			if err := a.store.CreateLog(el); err != nil {
+				log.Printf("create execution log for node %s failed: %v", el.NodeID, err)
+			}
 		}
 
 		// 使用独立 context，避免 HTTP 请求结束后 context 被取消
@@ -131,11 +143,13 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 			updates["error"] = err.Error()
 		} else {
 			updates["status"] = model.ExecCompleted
-			updates["output"] = result.Output
-			updates["node_states"] = result.NodeStates
+			updates["output"] = types.MustJSONRaw(result.Output)
+			updates["node_states"] = types.MustJSONRaw(result.NodeStates)
 		}
 
-		a.store.UpdateExecution(exec.ID, updates)
+		if err := a.store.UpdateExecution(exec.ID, updates); err != nil {
+			log.Printf("update execution %d failed: %v", exec.ID, err)
+		}
 	}()
 
 	c.JSON(http.StatusOK, gin.H{"execution_id": exec.ID})

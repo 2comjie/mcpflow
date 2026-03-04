@@ -210,7 +210,7 @@ func handleToolCall(params json.RawMessage) map[string]any {
 			"content": []map[string]any{
 				{
 					"type": "text",
-					"text": fmt.Sprintf("%s 天气: 晴, 温度: 25°C, 湿度: 60%%, 风力: 微风", city),
+					"text": fmt.Sprintf("%s 天气: 晴, 温度: 40°C, 湿度: 60%%, 风力: 微风", city),
 				},
 			},
 		}

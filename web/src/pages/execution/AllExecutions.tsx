@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Button, Table, Tag, message, Drawer, Descriptions, Timeline, Space, Tooltip } from 'antd'
+import { Button, Table, Tag, message, Drawer, Descriptions, Timeline, Space, Tooltip, Popconfirm } from 'antd'
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
   SyncOutlined,
   FileTextOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { executionApi, type Execution, type ExecutionLog } from '../../api/execution'
@@ -61,6 +62,16 @@ export default function AllExecutions() {
     loadExecutions()
   }, [])
 
+  const handleDelete = async (execId: number) => {
+    try {
+      await executionApi.delete(execId)
+      message.success('Deleted')
+      loadExecutions(page)
+    } catch (err: any) {
+      message.error(err.message)
+    }
+  }
+
   const openDetail = async (execId: number) => {
     try {
       const [exec, logsRes]: any = await Promise.all([
@@ -68,7 +79,7 @@ export default function AllExecutions() {
         executionApi.logs(execId),
       ])
       setDetail(exec)
-      setLogs(logsRes.data || [])
+      setLogs(Array.isArray(logsRes) ? logsRes : logsRes.data || [])
       setDrawerOpen(true)
     } catch (err: any) {
       message.error(err.message)
@@ -120,7 +131,7 @@ export default function AllExecutions() {
     },
     {
       title: 'Actions',
-      width: 140,
+      width: 180,
       render: (_: any, record: Execution) => (
         <Space>
           <Button
@@ -131,6 +142,16 @@ export default function AllExecutions() {
           >
             Detail
           </Button>
+          {record.status !== 'running' && (
+            <Popconfirm
+              title="Delete this execution?"
+              onConfirm={() => handleDelete(record.id)}
+            >
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                Delete
+              </Button>
+            </Popconfirm>
+          )}
         </Space>
       ),
     },
@@ -214,6 +235,24 @@ export default function AllExecutions() {
                         <div style={{ fontSize: 12, color: '#f04438', marginTop: 4 }}>
                           {log.error}
                         </div>
+                      )}
+                      {log.output && Object.keys(log.output).length > 0 && (
+                        <pre
+                          style={{
+                            fontSize: 11,
+                            background: '#f9fafb',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 6,
+                            padding: '6px 10px',
+                            marginTop: 6,
+                            maxHeight: 160,
+                            overflow: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
+                          }}
+                        >
+                          {JSON.stringify(log.output, null, 2)}
+                        </pre>
                       )}
                     </div>
                   ),

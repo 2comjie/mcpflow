@@ -2,6 +2,7 @@ package store
 
 import (
 	"github.com/2comjie/mcpflow/internal/model"
+	"gorm.io/gorm"
 )
 
 func (s *Store) CreateExecution(e *model.Execution) error {
@@ -50,6 +51,15 @@ func (s *Store) ListAllExecutions(page, pageSize int) ([]model.Execution, int64,
 		return nil, 0, err
 	}
 	return executions, total, nil
+}
+
+func (s *Store) DeleteExecution(id uint) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("execution_id = ?", id).Delete(&model.ExecutionLog{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Execution{}, id).Error
+	})
 }
 
 func (s *Store) CreateLog(log *model.ExecutionLog) error {

@@ -42,6 +42,7 @@ export const executionApi = {
     request.get('/executions', { params: { page, size } }),
   get: (id: number) => request.get(`/executions/${id}`),
   logs: (id: number) => request.get(`/executions/${id}/logs`),
+  delete: (id: number) => request.delete(`/executions/${id}`),
   listByWorkflow: (workflowId: number, page = 1, size = 20) =>
     request.get(`/workflows/${workflowId}/executions`, { params: { page, size } }),
 }

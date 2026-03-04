@@ -36,6 +36,7 @@ func (a *API) RegisterRoutes(r *gin.RouterGroup) {
 		exec.GET("", a.ListExecutions)
 		exec.GET("/:id", a.GetExecution)
 		exec.GET("/:id/logs", a.GetExecutionLogs)
+		exec.DELETE("/:id", a.DeleteExecution)
 	}
 
 	// MCP Server
