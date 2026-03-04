@@ -42,9 +42,12 @@ func (e *Engine) Run(ctx context.Context, wf *model.Workflow, input map[string]a
 	outputs := make(map[string]map[string]any)
 	nodeStates := make(model.NodeStates)
 
-	// 模板渲染数据
+	// 模板渲染数据：input 字段保留完整引用，同时平铺到顶层方便使用
 	templateData := map[string]any{
 		"input": input,
+	}
+	for k, v := range input {
+		templateData[k] = v
 	}
 
 	// 从 start 节点递归执行

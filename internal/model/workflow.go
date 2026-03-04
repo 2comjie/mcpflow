@@ -21,6 +21,7 @@ const (
 	NodeLLM       NodeType = "llm"
 	NodeMCP       NodeType = "mcp"
 	NodeHTTP      NodeType = "http"
+	NodeEmail     NodeType = "email"
 )
 
 // ==================== Workflow ====================
@@ -74,6 +75,7 @@ type NodeConfig struct {
 	Condition *ConditionConfig `json:"condition,omitempty"`
 	Code      *CodeConfig      `json:"code,omitempty"`
 	HTTP      *HTTPConfig      `json:"http,omitempty"`
+	Email     *EmailConfig     `json:"email,omitempty"`
 }
 
 type LLMConfig struct {
@@ -111,6 +113,19 @@ type HTTPConfig struct {
 	URL     string            `json:"url"`
 	Headers map[string]string `json:"headers,omitempty"`
 	Body    string            `json:"body,omitempty"`
+}
+
+type EmailConfig struct {
+	SMTPHost    string `json:"smtp_host"`
+	SMTPPort    int    `json:"smtp_port"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	From        string `json:"from"`
+	To          string `json:"to"`
+	Cc          string `json:"cc,omitempty"`
+	Subject     string `json:"subject"`
+	Body        string `json:"body"`
+	ContentType string `json:"content_type,omitempty"`
 }
 
 // ==================== GORM JSON 自定义类型 ====================

@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/smtp"
+	"strings"
+	"text/template"
 
 	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
@@ -37,6 +40,7 @@ func NewExecutorRegistry(mcpClient *mcp.Client) *ExecutorRegistry {
 	r.executors[model.NodeLLM] = &llmExecutor{}
 	r.executors[model.NodeMCP] = &mcpExecutor{client: mcpClient}
 	r.executors[model.NodeHTTP] = &httpExecutor{}
+	r.executors[model.NodeEmail] = &emailExecutor{}
 	return r
 }
 
@@ -341,4 +345,91 @@ func (e *httpExecutor) Execute(ctx context.Context, node *model.Node, _ map[stri
 	}
 
 	return result, nil
+}
+
+// ==================== Email Executor ====================
+
+type emailExecutor struct{}
+
+func (e *emailExecutor) Execute(_ context.Context, node *model.Node, input map[string]any) (map[string]any, error) {
+	cfg := node.Config.Email
+	if cfg == nil {
+		return nil, fmt.Errorf("email config is nil")
+	}
+
+	// 渲染 Subject 和 Body 中的模板变量
+	subject, err := renderTemplate(cfg.Subject, input)
+	if err != nil {
+		return nil, fmt.Errorf("render subject template: %w", err)
+	}
+	body, err := renderTemplate(cfg.Body, input)
+	if err != nil {
+		return nil, fmt.Errorf("render body template: %w", err)
+	}
+
+	contentType := cfg.ContentType
+	if contentType == "" {
+		contentType = "text/html"
+	}
+
+	toAddrs := splitAddrs(cfg.To)
+	ccAddrs := splitAddrs(cfg.Cc)
+
+	// 构建 MIME 邮件
+	var msg bytes.Buffer
+	msg.WriteString("From: " + cfg.From + "\r\n")
+	msg.WriteString("To: " + cfg.To + "\r\n")
+	if cfg.Cc != "" {
+		msg.WriteString("Cc: " + cfg.Cc + "\r\n")
+	}
+	msg.WriteString("Subject: " + subject + "\r\n")
+	msg.WriteString("MIME-Version: 1.0\r\n")
+	msg.WriteString("Content-Type: " + contentType + "; charset=\"UTF-8\"\r\n")
+	msg.WriteString("\r\n")
+	msg.WriteString(body)
+
+	// 收件人列表 = To + Cc
+	allRecipients := append(toAddrs, ccAddrs...)
+
+	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
+	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.SMTPHost)
+
+	if err := smtp.SendMail(addr, auth, cfg.From, allRecipients, msg.Bytes()); err != nil {
+		return nil, fmt.Errorf("send email: %w", err)
+	}
+
+	return map[string]any{
+		"status":  "sent",
+		"to":      cfg.To,
+		"subject": subject,
+	}, nil
+}
+
+func renderTemplate(tmplStr string, data map[string]any) (string, error) {
+	if !strings.Contains(tmplStr, "{{") {
+		return tmplStr, nil
+	}
+	tmpl, err := template.New("").Parse(tmplStr)
+	if err != nil {
+		return "", err
+	}
+	var buf bytes.Buffer
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+func splitAddrs(s string) []string {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	addrs := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if a := strings.TrimSpace(p); a != "" {
+			addrs = append(addrs, a)
+		}
+	}
+	return addrs
 }

@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"text/template"
 
 	"github.com/2comjie/mcpflow/internal/model"
@@ -13,7 +14,13 @@ func RenderString(s string, data map[string]any) string {
 	if s == "" {
 		return s
 	}
-	t, err := template.New("").Option("missingkey=zero").Parse(s)
+	funcMap := template.FuncMap{
+		"json": func(v any) string {
+			b, _ := json.Marshal(v)
+			return string(b)
+		},
+	}
+	t, err := template.New("").Funcs(funcMap).Option("missingkey=zero").Parse(s)
 	if err != nil {
 		return s
 	}
@@ -21,7 +28,10 @@ func RenderString(s string, data map[string]any) string {
 	if err := t.Execute(&buf, data); err != nil {
 		return s
 	}
-	return buf.String()
+	// missingkey=zero 对 interface{} 会渲染为 "<no value>"，替换为空字符串
+	result := buf.String()
+	result = strings.ReplaceAll(result, "<no value>", "")
+	return result
 }
 
 // RenderMap 递归渲染 map 中所有 string 值

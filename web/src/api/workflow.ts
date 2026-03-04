@@ -26,6 +26,7 @@ export interface NodeConfig {
   condition?: ConditionConfig
   code?: CodeConfig
   http?: HTTPConfig
+  email?: EmailConfig
 }
 
 export interface LLMConfig {
@@ -63,6 +64,19 @@ export interface HTTPConfig {
   url: string
   headers?: Record<string, string>
   body?: string
+}
+
+export interface EmailConfig {
+  smtp_host: string
+  smtp_port: number
+  username: string
+  password: string
+  from: string
+  to: string
+  cc?: string
+  subject: string
+  body: string
+  content_type?: string
 }
 
 export interface Edge {

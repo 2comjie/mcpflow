@@ -12,6 +12,7 @@ import {
   FlagOutlined,
   CheckCircleOutlined,
   GlobalOutlined,
+  MailOutlined,
   SettingOutlined,
   CloseOutlined,
 } from '@ant-design/icons'
@@ -48,6 +49,7 @@ const nodeGroups = [
       { type: 'mcp', label: 'MCP', color: '#3b5bdb', icon: <ApiOutlined /> },
       { type: 'code', label: 'Code', color: '#4f46e5', icon: <CodeOutlined /> },
       { type: 'http', label: 'HTTP', color: '#db2777', icon: <GlobalOutlined /> },
+      { type: 'email', label: 'Email', color: '#0891b2', icon: <MailOutlined /> },
     ],
   },
 ]
@@ -726,6 +728,96 @@ export default function WorkflowEditor() {
                         onChange={(e) => updateNodeConfig('http.body', e.target.value)}
                         rows={3}
                         placeholder='{"key": "value"}'
+                        style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+                      />
+                    </Form.Item>
+                  </>
+                )}
+
+                {(selectedNode.data as any).nodeType === 'email' && (
+                  <>
+                    <Form.Item label="SMTP Host">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.smtp_host}
+                        onChange={(e) => updateNodeConfig('email.smtp_host', e.target.value)}
+                        placeholder="smtp.example.com"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="SMTP Port">
+                      <Input
+                        type="number"
+                        value={(selectedNode.data as any).config?.email?.smtp_port}
+                        onChange={(e) => updateNodeConfig('email.smtp_port', Number(e.target.value))}
+                        placeholder="587"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Username">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.username}
+                        onChange={(e) => updateNodeConfig('email.username', e.target.value)}
+                        placeholder="user@example.com"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Password">
+                      <Input.Password
+                        value={(selectedNode.data as any).config?.email?.password}
+                        onChange={(e) => updateNodeConfig('email.password', e.target.value)}
+                        placeholder="SMTP password or app password"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="From">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.from}
+                        onChange={(e) => updateNodeConfig('email.from', e.target.value)}
+                        placeholder="sender@example.com"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="To">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.to}
+                        onChange={(e) => updateNodeConfig('email.to', e.target.value)}
+                        placeholder="a@example.com, b@example.com"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Cc">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.cc}
+                        onChange={(e) => updateNodeConfig('email.cc', e.target.value)}
+                        placeholder="Optional, comma separated"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Subject">
+                      <Input
+                        value={(selectedNode.data as any).config?.email?.subject}
+                        onChange={(e) => updateNodeConfig('email.subject', e.target.value)}
+                        placeholder="支持模板变量 {{.content}}"
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Content Type">
+                      <Select
+                        value={(selectedNode.data as any).config?.email?.content_type || 'text/html'}
+                        onChange={(v) => updateNodeConfig('email.content_type', v)}
+                        options={[
+                          { value: 'text/html', label: 'HTML' },
+                          { value: 'text/plain', label: 'Plain Text' },
+                        ]}
+                        style={{ borderRadius: 8 }}
+                      />
+                    </Form.Item>
+                    <Form.Item label="Body">
+                      <Input.TextArea
+                        value={(selectedNode.data as any).config?.email?.body}
+                        onChange={(e) => updateNodeConfig('email.body', e.target.value)}
+                        rows={8}
+                        placeholder={'<h1>执行结果</h1>\n<p>{{.content}}</p>'}
                         style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
                       />
                     </Form.Item>
