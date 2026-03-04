@@ -5,7 +5,6 @@ import (
 	"strconv"
 
 	"github.com/2comjie/mcpflow/internal/model"
-	"github.com/2comjie/mcpflow/pkg/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -59,9 +58,6 @@ func (a *API) UpdateLLMProvider(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-	if v, ok := updates["models"]; ok {
-		updates["models"] = types.MustJSONRaw(v)
 	}
 	if err := a.store.UpdateLLMProvider(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

@@ -23,6 +23,7 @@ func (s *Store) ListLLMProviders() ([]model.LLMProvider, error) {
 }
 
 func (s *Store) UpdateLLMProvider(id uint, updates map[string]any) error {
+	marshalJSONFields(updates, "models")
 	return s.db.Model(&model.LLMProvider{}).Where("id = ?", id).Updates(updates).Error
 }
 

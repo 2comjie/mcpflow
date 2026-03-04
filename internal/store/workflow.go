@@ -33,6 +33,7 @@ func (s *Store) ListWorkflows(page, pageSize int) ([]model.Workflow, int64, erro
 }
 
 func (s *Store) UpdateWorkflow(id uint, updates map[string]any) error {
+	marshalJSONFields(updates, "nodes", "edges")
 	return s.db.Model(&model.Workflow{}).Where("id = ?", id).Updates(updates).Error
 }
 

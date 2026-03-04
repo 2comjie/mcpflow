@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
-	"github.com/2comjie/mcpflow/pkg/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -42,11 +41,6 @@ func (a *API) UpdateMCPServer(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-	for _, key := range []string{"tools", "prompts", "resources"} {
-		if v, ok := updates[key]; ok {
-			updates[key] = types.MustJSONRaw(v)
-		}
 	}
 	if err := a.store.UpdateMCPServer(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -99,9 +93,9 @@ func (a *API) TestMCPServer(c *gin.Context) {
 	now := time.Now()
 	updates := map[string]any{
 		"status":     "active",
-		"tools":      types.MustJSONRaw(tools),
-		"prompts":    types.MustJSONRaw(prompts),
-		"resources":  types.MustJSONRaw(resources),
+		"tools":      tools,
+		"prompts":    prompts,
+		"resources":  resources,
 		"checked_at": now,
 	}
 	a.store.UpdateMCPServerCache(srv.ID, updates)
@@ -138,7 +132,7 @@ func (a *API) GetMCPServerTools(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"tools": types.MustJSONRaw(tools)})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"tools": tools})
 	c.JSON(http.StatusOK, tools)
 }
 
@@ -165,7 +159,7 @@ func (a *API) GetMCPServerPrompts(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"prompts": types.MustJSONRaw(prompts)})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"prompts": prompts})
 	c.JSON(http.StatusOK, prompts)
 }
 
@@ -192,6 +186,6 @@ func (a *API) GetMCPServerResources(c *gin.Context) {
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}
-	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"resources": types.MustJSONRaw(resources)})
+	a.store.UpdateMCPServerCache(srv.ID, map[string]any{"resources": resources})
 	c.JSON(http.StatusOK, resources)
 }

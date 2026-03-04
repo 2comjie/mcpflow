@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
-	"github.com/2comjie/mcpflow/pkg/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -60,12 +59,6 @@ func (a *API) UpdateWorkflow(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updates); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
-	}
-	// nodes 和 edges 是自定义 GORM 类型，通过 map 更新时需要预序列化
-	for _, key := range []string{"nodes", "edges"} {
-		if v, ok := updates[key]; ok {
-			updates[key] = types.MustJSONRaw(v)
-		}
 	}
 	if err := a.store.UpdateWorkflow(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -143,8 +136,8 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 			updates["error"] = err.Error()
 		} else {
 			updates["status"] = model.ExecCompleted
-			updates["output"] = types.MustJSONRaw(result.Output)
-			updates["node_states"] = types.MustJSONRaw(result.NodeStates)
+			updates["output"] = result.Output
+			updates["node_states"] = result.NodeStates
 		}
 
 		if err := a.store.UpdateExecution(exec.ID, updates); err != nil {

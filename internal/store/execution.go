@@ -18,6 +18,7 @@ func (s *Store) GetExecution(id uint) (*model.Execution, error) {
 }
 
 func (s *Store) UpdateExecution(id uint, updates map[string]any) error {
+	marshalJSONFields(updates, "input", "output", "node_states")
 	return s.db.Model(&model.Execution{}).Where("id = ?", id).Updates(updates).Error
 }
 

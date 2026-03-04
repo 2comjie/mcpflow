@@ -26,6 +26,7 @@ func (s *Store) ListMCPServers() ([]model.MCPServer, error) {
 }
 
 func (s *Store) UpdateMCPServer(id uint, updates map[string]any) error {
+	marshalJSONFields(updates, "headers", "tools", "prompts", "resources")
 	return s.db.Model(&model.MCPServer{}).Where("id = ?", id).Updates(updates).Error
 }
 
@@ -34,6 +35,7 @@ func (s *Store) DeleteMCPServer(id uint) error {
 }
 
 func (s *Store) UpdateMCPServerCache(id uint, updates map[string]any) error {
+	marshalJSONFields(updates, "tools", "prompts", "resources")
 	return s.db.Model(&model.MCPServer{}).Where("id = ?", id).
 		Select(keysOf(updates)).Updates(updates).Error
 }
