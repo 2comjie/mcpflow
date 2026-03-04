@@ -12,6 +12,7 @@ export interface LLMProvider {
 
 export const llmProviderApi = {
   list: () => request.get('/llm-providers'),
+  get: (id: number) => request.get(`/llm-providers/${id}`),
   create: (data: Partial<LLMProvider>) => request.post('/llm-providers', data),
   update: (id: number, data: Partial<LLMProvider>) => request.put(`/llm-providers/${id}`, data),
   delete: (id: number) => request.delete(`/llm-providers/${id}`),

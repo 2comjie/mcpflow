@@ -22,6 +22,20 @@ func (a *API) CreateLLMProvider(c *gin.Context) {
 	c.JSON(http.StatusOK, p)
 }
 
+func (a *API) GetLLMProvider(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	p, err := a.store.GetLLMProvider(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
+		return
+	}
+	c.JSON(http.StatusOK, p)
+}
+
 func (a *API) ListLLMProviders(c *gin.Context) {
 	list, err := a.store.ListLLMProviders()
 	if err != nil {

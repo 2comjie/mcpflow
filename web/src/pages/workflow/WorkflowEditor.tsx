@@ -335,18 +335,22 @@ export default function WorkflowEditor() {
     if (server) loadServerCapabilities(server.id)
   }
 
-  const handleLLMProviderChange = (providerId: number) => {
-    const provider = llmProviders.find((p) => p.id === providerId)
-    if (!provider || !selectedNode) return
-    const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
-    if (!config.llm) config.llm = {}
-    config.llm.base_url = provider.base_url
-    config.llm.api_key = provider.api_key
+  const handleLLMProviderChange = async (providerId: number) => {
+    if (!selectedNode) return
+    try {
+      const provider: any = await llmProviderApi.get(providerId)
+      const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
+      if (!config.llm) config.llm = {}
+      config.llm.base_url = provider.base_url
+      config.llm.api_key = provider.api_key
 
-    setNodes((nds) =>
-      nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
-    )
-    setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, config } })
+      setNodes((nds) =>
+        nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
+      )
+      setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, config } })
+    } catch {
+      message.error('Failed to load provider details')
+    }
   }
 
   // MCP 统一面板
@@ -694,6 +698,66 @@ export default function WorkflowEditor() {
                 </Form.Item>
 
                 <Divider style={{ margin: '12px 0' }} />
+
+                {/* 可用变量提示 */}
+                {!['start', 'end'].includes((selectedNode.data as any).nodeType) && (() => {
+                  // 找到所有上游节点（通过 edges 反向查找）
+                  const getUpstream = (nodeId: string, visited = new Set<string>()): FlowNode[] => {
+                    if (visited.has(nodeId)) return []
+                    visited.add(nodeId)
+                    const result: FlowNode[] = []
+                    for (const e of edges) {
+                      if (e.target === nodeId) {
+                        const srcNode = nodes.find((n) => n.id === e.source)
+                        if (srcNode) {
+                          result.push(srcNode)
+                          result.push(...getUpstream(srcNode.id, visited))
+                        }
+                      }
+                    }
+                    return result
+                  }
+                  const upstream = getUpstream(selectedNode.id)
+                  const outputHints: Record<string, string[]> = {
+                    start: ['(workflow input fields)'],
+                    llm: ['content', 'model', 'total_tokens'],
+                    mcp: ['content', '...'],
+                    code: ['(depends on code return)'],
+                    http: ['status_code', 'body', 'json'],
+                    condition: ['branch'],
+                    email: ['status', 'to', 'subject'],
+                  }
+                  return (
+                    <div style={{
+                      background: '#f0f5ff',
+                      border: '1px solid #d6e4ff',
+                      borderRadius: 8,
+                      padding: '8px 12px',
+                      marginBottom: 12,
+                      fontSize: 12,
+                    }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4, color: '#1d39c4' }}>
+                        Available Variables
+                      </div>
+                      <div style={{ color: '#4e5969', lineHeight: 1.8 }}>
+                        <div><code style={{ background: '#e6f4ff', padding: '1px 4px', borderRadius: 3 }}>{'{{.input.xxx}}'}</code> workflow input</div>
+                        {upstream.filter((n) => (n.data as any).nodeType !== 'start').map((n) => {
+                          const nType = (n.data as any).nodeType as string
+                          const hints = outputHints[nType] || ['...']
+                          return (
+                            <div key={n.id}>
+                              <code style={{ background: '#e6f4ff', padding: '1px 4px', borderRadius: 3 }}>
+                                {'{{.' + n.id + '.xxx}}'}
+                              </code>
+                              {' '}{(n.data as any).label || n.id}
+                              <span style={{ color: '#8c8c8c' }}> → {hints.join(', ')}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {(selectedNode.data as any).nodeType === 'llm' && renderLLMPanel()}
                 {(selectedNode.data as any).nodeType === 'mcp' && renderMCPPanel()}

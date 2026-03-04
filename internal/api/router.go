@@ -57,6 +57,7 @@ func (a *API) RegisterRoutes(r *gin.RouterGroup) {
 	{
 		lp.POST("", a.CreateLLMProvider)
 		lp.GET("", a.ListLLMProviders)
+		lp.GET("/:id", a.GetLLMProvider)
 		lp.PUT("/:id", a.UpdateLLMProvider)
 		lp.DELETE("/:id", a.DeleteLLMProvider)
 	}
