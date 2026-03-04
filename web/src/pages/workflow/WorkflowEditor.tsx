@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Input, message, Tooltip, Divider, Form, Select, Tag, Spin, Modal } from 'antd'
+import { Button, Input, message, Tooltip, Divider, Form, Select, Tag, Modal } from 'antd'
 import {
   SaveOutlined,
   PlayCircleOutlined,
@@ -46,7 +46,7 @@ const nodeGroups = [
     title: 'PROCESSING',
     items: [
       { type: 'llm', label: 'LLM', color: '#ea580c', icon: <RobotOutlined /> },
-      { type: 'mcp', label: 'MCP', color: '#3b5bdb', icon: <ApiOutlined /> },
+      { type: 'agent', label: 'Agent', color: '#7c3aed', icon: <ApiOutlined /> },
       { type: 'code', label: 'Code', color: '#4f46e5', icon: <CodeOutlined /> },
       { type: 'http', label: 'HTTP', color: '#db2777', icon: <GlobalOutlined /> },
       { type: 'email', label: 'Email', color: '#0891b2', icon: <MailOutlined /> },
@@ -70,12 +70,8 @@ export default function WorkflowEditor() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>([])
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null)
 
-  // MCP servers & capabilities
+  // MCP servers
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
-  const [mcpTools, setMcpTools] = useState<any[]>([])
-  const [mcpPrompts, setMcpPrompts] = useState<any[]>([])
-  const [mcpResources, setMcpResources] = useState<any[]>([])
-  const [mcpLoading, setMcpLoading] = useState(false)
 
   // LLM Providers
   const [llmProviders, setLlmProviders] = useState<LLMProvider[]>([])
@@ -127,40 +123,7 @@ export default function WorkflowEditor() {
     }
   }, [id])
 
-  // 加载 MCP Server 能力
-  const loadServerCapabilities = async (serverId: number) => {
-    setMcpLoading(true)
-    try {
-      const [toolsRes, promptsRes, resourcesRes]: any[] = await Promise.allSettled([
-        mcpServerApi.tools(serverId),
-        mcpServerApi.prompts(serverId),
-        mcpServerApi.resources(serverId),
-      ])
-      if (toolsRes.status === 'fulfilled') setMcpTools(Array.isArray(toolsRes.value) ? toolsRes.value : toolsRes.value?.tools || [])
-      if (promptsRes.status === 'fulfilled') setMcpPrompts(Array.isArray(promptsRes.value) ? promptsRes.value : promptsRes.value?.prompts || [])
-      if (resourcesRes.status === 'fulfilled') setMcpResources(Array.isArray(resourcesRes.value) ? resourcesRes.value : resourcesRes.value?.resources || [])
-    } catch {
-      // ignore
-    } finally {
-      setMcpLoading(false)
-    }
-  }
 
-  // 当选中 MCP 节点且已选了 server，加载能力
-  useEffect(() => {
-    if (!selectedNode) return
-    const nodeType = (selectedNode.data as any).nodeType
-    if (nodeType !== 'mcp') return
-    const config = (selectedNode.data as any).config?.mcp || {}
-    if (config.server_url) {
-      const server = mcpServers.find((s) => s.url === config.server_url)
-      if (server) loadServerCapabilities(server.id)
-    } else {
-      setMcpTools([])
-      setMcpPrompts([])
-      setMcpResources([])
-    }
-  }, [selectedNode?.id])
 
   const isValidConnection = useCallback(
     (connection: Connection | FlowEdge) => {
@@ -175,9 +138,11 @@ export default function WorkflowEditor() {
       if (sourceType === 'end') return false
       if (targetType === 'start') return false
 
-      const outCount = edges.filter((e) => e.source === connection.source).length
-      if (sourceType === 'condition' && outCount >= 2) return false
-      if (sourceType !== 'condition' && outCount >= 1) return false
+      // 不允许重复连线
+      const exists = edges.some(
+        (e) => e.source === connection.source && e.target === connection.target,
+      )
+      if (exists) return false
 
       return true
     },
@@ -314,46 +279,16 @@ export default function WorkflowEditor() {
 
   const serverOptions = mcpServers
     .filter((s) => s.status === 'active')
-    .map((s) => ({ value: s.url, label: `${s.name} (${s.url})` }))
+    .map((s) => ({ value: s.url, label: s.name, title: s.url }))
 
-  const handleMCPServerChange = (serverUrl: string) => {
-    if (!selectedNode) return
-    const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
-    if (!config.mcp) config.mcp = {}
-    config.mcp.server_url = serverUrl
-
-    // 自动填充 headers
-    const server = mcpServers.find((s) => s.url === serverUrl)
-    if (server?.headers && Object.keys(server.headers).length > 0) {
-      config.mcp.headers = server.headers
-    } else {
-      delete config.mcp.headers
-    }
-
-    // 清除之前的选择
-    config.mcp.tool_name = ''
-    config.mcp.prompt_name = ''
-    config.mcp.resource_uri = ''
-    setMcpTools([])
-    setMcpPrompts([])
-    setMcpResources([])
-
-    setNodes((nds) =>
-      nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
-    )
-    setSelectedNode({ ...selectedNode, data: { ...selectedNode.data, config } })
-
-    if (server) loadServerCapabilities(server.id)
-  }
-
-  const handleLLMProviderChange = async (providerId: number) => {
+  const handleLLMProviderChange = async (providerId: number, configKey: 'llm' | 'agent' = 'llm') => {
     if (!selectedNode) return
     try {
       const provider: any = await llmProviderApi.get(providerId)
       const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
-      if (!config.llm) config.llm = {}
-      config.llm.base_url = provider.base_url
-      config.llm.api_key = provider.api_key
+      if (!config[configKey]) config[configKey] = {}
+      config[configKey].base_url = provider.base_url
+      config[configKey].api_key = provider.api_key
 
       setNodes((nds) =>
         nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
@@ -364,176 +299,113 @@ export default function WorkflowEditor() {
     }
   }
 
-  // MCP 统一面板
-  const renderMCPPanel = () => {
-    const config = (selectedNode?.data as any)?.config?.mcp || {}
+  // Agent 面板 (LLM + MCP Servers)
+  const renderAgentPanel = () => {
+    const config = (selectedNode?.data as any)?.config?.agent || {}
+    const selectedServerUrls: string[] = (config.mcp_servers || []).map((s: any) => s.url)
+
+    const handleAgentServersChange = (urls: string[]) => {
+      const servers = urls.map((url) => {
+        const srv = mcpServers.find((s) => s.url === url)
+        const headers = srv?.headers && Object.keys(srv.headers).length > 0 ? srv.headers : undefined
+        return { url, headers }
+      })
+      updateNodeConfig('agent.mcp_servers', servers)
+    }
+
     return (
       <>
-        <Form.Item label="Action">
+        <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f5f3ff', borderRadius: 8, borderLeft: '3px solid #7c3aed' }}>
+          Agent 会自动从 MCP Server 发现工具，由 LLM 自主决定调用哪些工具。
+        </div>
+
+        <Divider style={{ margin: '8px 0', fontSize: 12, color: '#98a2b3' }}>LLM</Divider>
+
+        <Form.Item label="Provider (Quick Fill)">
           <Select
-            value={config.action || undefined}
-            onChange={(v) => updateNodeConfig('mcp.action', v)}
-            placeholder="Select action"
+            value={undefined}
+            onChange={(v) => handleLLMProviderChange(v, 'agent')}
+            placeholder="Select to auto-fill"
             style={{ borderRadius: 8 }}
-            options={[
-              { value: 'call_tool', label: 'Call Tool' },
-              { value: 'get_prompt', label: 'Get Prompt' },
-              { value: 'read_resource', label: 'Read Resource' },
-            ]}
+            allowClear
+            options={llmProviders.map((p) => ({
+              value: p.id,
+              label: p.name,
+            }))}
           />
         </Form.Item>
-        <Form.Item label="MCP Server">
+        <Form.Item label="Base URL">
+          <Input
+            value={config.base_url}
+            onChange={(e) => updateNodeConfig('agent.base_url', e.target.value)}
+            placeholder="https://api.deepseek.com/v1"
+            style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+          />
+        </Form.Item>
+        <Form.Item label="API Key">
+          <Input.Password
+            value={config.api_key}
+            onChange={(e) => updateNodeConfig('agent.api_key', e.target.value)}
+            placeholder="sk-..."
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="Model">
+          <Input
+            value={config.model}
+            onChange={(e) => updateNodeConfig('agent.model', e.target.value)}
+            placeholder="deepseek-chat"
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+
+        <Divider style={{ margin: '8px 0', fontSize: 12, color: '#98a2b3' }}>MCP Servers</Divider>
+
+        <Form.Item label="MCP Servers" extra={
+          <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+            Agent 会自动发现所选服务器的所有工具
+          </span>
+        }>
           <Select
-            value={config.server_url || undefined}
-            onChange={handleMCPServerChange}
+            mode="multiple"
+            value={selectedServerUrls}
+            onChange={handleAgentServersChange}
             options={serverOptions}
-            placeholder="Select MCP Server"
+            placeholder="Select MCP Servers"
             style={{ borderRadius: 8 }}
             showSearch
             optionFilterProp="label"
           />
         </Form.Item>
 
-        {config.action === 'call_tool' && (
-          <Form.Item label="Tool">
-            {mcpLoading ? (
-              <Spin size="small" />
-            ) : (
-              <Select
-                value={config.tool_name || undefined}
-                onChange={(v) => updateNodeConfig('mcp.tool_name', v)}
-                placeholder={config.server_url ? 'Select tool' : 'Select a server first'}
-                disabled={!config.server_url}
-                style={{ borderRadius: 8 }}
-                showSearch
-                optionFilterProp="label"
-                options={mcpTools.map((t: any) => ({
-                  value: t.name,
-                  label: t.name,
-                  title: t.description,
-                }))}
-              />
-            )}
-          </Form.Item>
-        )}
+        <Divider style={{ margin: '8px 0', fontSize: 12, color: '#98a2b3' }}>Prompt</Divider>
 
-        {config.action === 'get_prompt' && (
-          <Form.Item label="Prompt">
-            {mcpLoading ? (
-              <Spin size="small" />
-            ) : (
-              <Select
-                value={config.prompt_name || undefined}
-                onChange={(v) => updateNodeConfig('mcp.prompt_name', v)}
-                placeholder={config.server_url ? 'Select prompt' : 'Select a server first'}
-                disabled={!config.server_url}
-                style={{ borderRadius: 8 }}
-                showSearch
-                optionFilterProp="label"
-                options={mcpPrompts.map((p: any) => ({
-                  value: p.name,
-                  label: p.name,
-                  title: p.description,
-                }))}
-              />
-            )}
-          </Form.Item>
-        )}
-
-        {config.action === 'read_resource' && (
-          <Form.Item label="Resource URI">
-            {mcpLoading ? (
-              <Spin size="small" />
-            ) : (
-              <Select
-                value={config.resource_uri || undefined}
-                onChange={(v) => updateNodeConfig('mcp.resource_uri', v)}
-                placeholder={config.server_url ? 'Select resource' : 'Select a server first'}
-                disabled={!config.server_url}
-                style={{ borderRadius: 8 }}
-                showSearch
-                optionFilterProp="label"
-                options={mcpResources.map((r: any) => ({
-                  value: r.uri,
-                  label: r.name || r.uri,
-                  title: r.description,
-                }))}
-              />
-            )}
-          </Form.Item>
-        )}
-
-        {/* 显示选中工具的描述和参数输入 */}
-        {config.action === 'call_tool' && config.tool_name && mcpTools.length > 0 && (() => {
-          const tool = mcpTools.find((t: any) => t.name === config.tool_name)
-          if (!tool) return null
-          const props = tool.inputSchema?.properties || {}
-          const required = tool.inputSchema?.required || []
-          const args = config.arguments || {}
-          return (
-            <>
-              {tool.description && (
-                <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
-                  {tool.description}
-                </div>
-              )}
-              {Object.keys(props).map((key) => (
-                <Form.Item
-                  key={key}
-                  label={
-                    <span>
-                      {key}
-                      {required.includes(key) && <span style={{ color: '#f04438' }}> *</span>}
-                      {props[key].description && (
-                        <Tooltip title={props[key].description}>
-                          <span style={{ color: '#98a2b3', marginLeft: 4, fontSize: 11 }}>(?)</span>
-                        </Tooltip>
-                      )}
-                    </span>
-                  }
-                >
-                  <Input
-                    value={args[key] ?? ''}
-                    onChange={(e) => {
-                      const newArgs = { ...args, [key]: e.target.value }
-                      updateNodeConfig('mcp.arguments', newArgs)
-                    }}
-                    placeholder={props[key].description || `Enter ${key}`}
-                    style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
-                  />
-                </Form.Item>
-              ))}
-            </>
-          )
-        })()}
-
-        {/* get_prompt 参数输入 */}
-        {config.action === 'get_prompt' && config.prompt_name && mcpPrompts.length > 0 && (() => {
-          const prompt = mcpPrompts.find((p: any) => p.name === config.prompt_name)
-          if (!prompt?.arguments?.length) return null
-          const args = config.prompt_args || {}
-          return prompt.arguments.map((arg: any) => (
-            <Form.Item
-              key={arg.name}
-              label={
-                <span>
-                  {arg.name}
-                  {arg.required && <span style={{ color: '#f04438' }}> *</span>}
-                </span>
-              }
-            >
-              <Input
-                value={args[arg.name] ?? ''}
-                onChange={(e) => {
-                  const newArgs = { ...args, [arg.name]: e.target.value }
-                  updateNodeConfig('mcp.prompt_args', newArgs)
-                }}
-                placeholder={arg.description || `Enter ${arg.name}`}
-                style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
-              />
-            </Form.Item>
-          ))
-        })()}
+        <Form.Item label="System Message">
+          <Input.TextArea
+            value={config.system_msg}
+            onChange={(e) => updateNodeConfig('agent.system_msg', e.target.value)}
+            rows={2}
+            placeholder="Optional system message"
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="Prompt">
+          <Input.TextArea
+            value={config.prompt}
+            onChange={(e) => updateNodeConfig('agent.prompt', e.target.value)}
+            rows={3}
+            placeholder={'Supports {{.input.query}} {{.node_1.content}}'}
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
+        <Form.Item label="Max Iterations">
+          <Input
+            type="number"
+            value={config.max_iterations || 10}
+            onChange={(e) => updateNodeConfig('agent.max_iterations', parseInt(e.target.value) || 10)}
+            style={{ borderRadius: 8 }}
+          />
+        </Form.Item>
       </>
     )
   }
@@ -761,7 +633,7 @@ export default function WorkflowEditor() {
                 <Divider style={{ margin: '12px 0' }} />
 
                 {(selectedNode.data as any).nodeType === 'llm' && renderLLMPanel()}
-                {(selectedNode.data as any).nodeType === 'mcp' && renderMCPPanel()}
+                {(selectedNode.data as any).nodeType === 'agent' && renderAgentPanel()}
 
                 {(selectedNode.data as any).nodeType === 'http' && (
                   <>
@@ -890,15 +762,22 @@ export default function WorkflowEditor() {
                 )}
 
                 {(selectedNode.data as any).nodeType === 'condition' && (
-                  <Form.Item label="Expression">
-                    <Input.TextArea
-                      value={(selectedNode.data as any).config?.condition?.expression}
-                      onChange={(e) => updateNodeConfig('condition.expression', e.target.value)}
-                      rows={2}
-                      placeholder="status == 'ok'"
-                      style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
-                    />
-                  </Form.Item>
+                  <>
+                    <Form.Item label="Expression" extra={
+                      <span style={{ fontSize: 11, color: '#8c8c8c' }}>
+                        表达式基于上游节点输出求值，结果为 true 走 true 分支，否则走 false 分支。
+                        <br />示例: <code>temp &gt; 35</code>、<code>status == 'ok'</code>、<code>score &gt;= 80 &amp;&amp; level == 'A'</code>
+                      </span>
+                    }>
+                      <Input.TextArea
+                        value={(selectedNode.data as any).config?.condition?.expression}
+                        onChange={(e) => updateNodeConfig('condition.expression', e.target.value)}
+                        rows={2}
+                        placeholder="temp > 35"
+                        style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+                      />
+                    </Form.Item>
+                  </>
                 )}
 
                 {(selectedNode.data as any).nodeType === 'code' && (

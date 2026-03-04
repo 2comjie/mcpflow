@@ -22,7 +22,7 @@ export interface Node {
 
 export interface NodeConfig {
   llm?: LLMConfig
-  mcp?: MCPConfig
+  agent?: AgentConfig
   condition?: ConditionConfig
   code?: CodeConfig
   http?: HTTPConfig
@@ -39,15 +39,21 @@ export interface LLMConfig {
   max_tokens?: number
 }
 
-export interface MCPConfig {
-  action: string // call_tool, get_prompt, read_resource
-  server_url: string
+export interface AgentMCPServer {
+  url: string
   headers?: Record<string, string>
-  tool_name?: string
-  arguments?: Record<string, any>
-  prompt_name?: string
-  prompt_args?: Record<string, any>
-  resource_uri?: string
+}
+
+export interface AgentConfig {
+  base_url: string
+  api_key: string
+  model: string
+  prompt: string
+  system_msg?: string
+  mcp_servers: AgentMCPServer[]
+  max_iterations?: number
+  temperature?: number
+  max_tokens?: number
 }
 
 export interface ConditionConfig {

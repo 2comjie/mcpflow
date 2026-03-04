@@ -39,7 +39,7 @@ func NewExecutorRegistry(mcpClient *mcp.Client) *ExecutorRegistry {
 	r.executors[model.NodeCondition] = &conditionExecutor{}
 	r.executors[model.NodeCode] = &codeExecutor{}
 	r.executors[model.NodeLLM] = &llmExecutor{}
-	r.executors[model.NodeMCP] = &mcpExecutor{client: mcpClient}
+	r.executors[model.NodeAgent] = &agentExecutor{mcpClient: mcpClient}
 	r.executors[model.NodeHTTP] = &httpExecutor{}
 	r.executors[model.NodeEmail] = &emailExecutor{}
 	return r
@@ -275,28 +275,159 @@ func (e *llmExecutor) Execute(ctx context.Context, node *model.Node, _ map[strin
 	}, nil
 }
 
-// ==================== MCP Executor ====================
+// ==================== Agent Executor (LLM + MCP Tool Calling) ====================
 
-type mcpExecutor struct {
-	client *mcp.Client
+type agentExecutor struct {
+	mcpClient *mcp.Client
 }
 
-func (e *mcpExecutor) Execute(ctx context.Context, node *model.Node, _ map[string]any) (map[string]any, error) {
-	cfg := node.Config.MCP
+func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map[string]any) (map[string]any, error) {
+	cfg := node.Config.Agent
 	if cfg == nil {
-		return nil, fmt.Errorf("mcp config is nil")
+		return nil, fmt.Errorf("agent config is nil")
+	}
+	if len(cfg.McpServers) == 0 {
+		return nil, fmt.Errorf("agent has no mcp servers configured")
 	}
 
-	switch cfg.Action {
-	case "call_tool":
-		return e.client.CallTool(ctx, cfg.ServerURL, cfg.ToolName, cfg.Arguments, cfg.Headers)
-	case "get_prompt":
-		return e.client.GetPrompt(ctx, cfg.ServerURL, cfg.PromptName, cfg.PromptArgs, cfg.Headers)
-	case "read_resource":
-		return e.client.ReadResource(ctx, cfg.ServerURL, cfg.ResourceURI, cfg.Headers)
-	default:
-		return nil, fmt.Errorf("unknown mcp action: %s", cfg.Action)
+	maxIter := cfg.MaxIterations
+	if maxIter <= 0 {
+		maxIter = 10
 	}
+
+	// 1. 从所有 MCP Server 获取 tools 并转换为 OpenAI Tool 格式
+	type serverTool struct {
+		serverIdx int
+		origName  string
+	}
+	toolMap := make(map[string]serverTool)  // prefixed name -> server info
+	var tools []llm.Tool
+
+	for i, srv := range cfg.McpServers {
+		mcpTools, err := e.mcpClient.ListTools(ctx, srv.URL, srv.Headers)
+		if err != nil {
+			return nil, fmt.Errorf("list tools from %s: %w", srv.URL, err)
+		}
+		for _, t := range mcpTools {
+			tm, ok := t.(map[string]any)
+			if !ok {
+				continue
+			}
+			name, _ := tm["name"].(string)
+			desc, _ := tm["description"].(string)
+			params := tm["inputSchema"]
+
+			prefixed := fmt.Sprintf("s%d_%s", i, name)
+			toolMap[prefixed] = serverTool{serverIdx: i, origName: name}
+
+			tools = append(tools, llm.Tool{
+				Type: "function",
+				Function: llm.ToolFunction{
+					Name:        prefixed,
+					Description: desc,
+					Parameters:  params,
+				},
+			})
+		}
+	}
+
+	// 2. 构建初始 messages
+	client := llm.NewClient(cfg.BaseURL, cfg.APIKey)
+	messages := make([]llm.Message, 0, 4)
+	if cfg.SystemMsg != "" {
+		messages = append(messages, llm.Message{Role: "system", Content: cfg.SystemMsg})
+	}
+	messages = append(messages, llm.Message{Role: "user", Content: cfg.Prompt})
+
+	// 3. 循环调用 LLM，处理 tool_calls
+	totalToolCalls := 0
+	iterations := 0
+
+	for iterations < maxIter {
+		iterations++
+
+		resp, err := client.Chat(ctx, &llm.ChatRequest{
+			Model:       cfg.Model,
+			Messages:    messages,
+			Tools:       tools,
+			Temperature: cfg.Temperature,
+			MaxTokens:   cfg.MaxTokens,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("agent llm chat (iter %d): %w", iterations, err)
+		}
+
+		if len(resp.Choices) == 0 {
+			return nil, fmt.Errorf("agent llm returned no choices")
+		}
+
+		choice := resp.Choices[0]
+
+		// 没有 tool_calls，返回最终结果
+		if len(choice.Message.ToolCalls) == 0 {
+			return map[string]any{
+				"content":          choice.Message.Content,
+				"tool_calls_count": totalToolCalls,
+				"iterations":       iterations,
+				"total_tokens":     resp.Usage.TotalTokens,
+			}, nil
+		}
+
+		// 有 tool_calls，追加 assistant 消息
+		messages = append(messages, choice.Message)
+
+		// 执行每个 tool call
+		for _, tc := range choice.Message.ToolCalls {
+			totalToolCalls++
+			st, ok := toolMap[tc.Function.Name]
+			if !ok {
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    fmt.Sprintf("error: unknown tool %s", tc.Function.Name),
+				})
+				continue
+			}
+
+			// 解析参数
+			var args map[string]any
+			if err := json.Unmarshal([]byte(tc.Function.Arguments), &args); err != nil {
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    fmt.Sprintf("error: invalid arguments: %v", err),
+				})
+				continue
+			}
+
+			// 通过 MCP 调用工具
+			srv := cfg.McpServers[st.serverIdx]
+			result, err := e.mcpClient.CallTool(ctx, srv.URL, st.origName, args, srv.Headers)
+			if err != nil {
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    fmt.Sprintf("error: %v", err),
+				})
+				continue
+			}
+
+			// 将 MCP 结果序列化为文本返回给 LLM
+			resultJSON, _ := json.Marshal(result)
+			messages = append(messages, llm.Message{
+				Role:       "tool",
+				ToolCallID: tc.ID,
+				Content:    string(resultJSON),
+			})
+		}
+	}
+
+	// 达到最大迭代次数，返回最后一次的内容
+	return map[string]any{
+		"content":          "Agent reached max iterations without final response",
+		"tool_calls_count": totalToolCalls,
+		"iterations":       iterations,
+	}, nil
 }
 
 // ==================== HTTP Executor ====================

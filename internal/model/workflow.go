@@ -19,7 +19,7 @@ const (
 	NodeCondition NodeType = "condition"
 	NodeCode      NodeType = "code"
 	NodeLLM       NodeType = "llm"
-	NodeMCP       NodeType = "mcp"
+	NodeAgent     NodeType = "agent"
 	NodeHTTP      NodeType = "http"
 	NodeEmail     NodeType = "email"
 )
@@ -71,7 +71,7 @@ type Position struct {
 
 type NodeConfig struct {
 	LLM       *LLMConfig       `json:"llm,omitempty"`
-	MCP       *MCPConfig       `json:"mcp,omitempty"`
+	Agent     *AgentConfig     `json:"agent,omitempty"`
 	Condition *ConditionConfig `json:"condition,omitempty"`
 	Code      *CodeConfig      `json:"code,omitempty"`
 	HTTP      *HTTPConfig      `json:"http,omitempty"`
@@ -88,15 +88,21 @@ type LLMConfig struct {
 	MaxTokens   int     `json:"max_tokens,omitempty"`
 }
 
-type MCPConfig struct {
-	Action      string            `json:"action"` // call_tool, get_prompt, read_resource
-	ServerURL   string            `json:"server_url"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	ToolName    string            `json:"tool_name,omitempty"`
-	Arguments   map[string]any    `json:"arguments,omitempty"`
-	PromptName  string            `json:"prompt_name,omitempty"`
-	PromptArgs  map[string]any    `json:"prompt_args,omitempty"`
-	ResourceURI string            `json:"resource_uri,omitempty"`
+type AgentConfig struct {
+	BaseURL       string           `json:"base_url"`
+	APIKey        string           `json:"api_key"`
+	Model         string           `json:"model"`
+	Prompt        string           `json:"prompt"`
+	SystemMsg     string           `json:"system_msg,omitempty"`
+	McpServers    []AgentMCPServer `json:"mcp_servers"`
+	MaxIterations int              `json:"max_iterations,omitempty"`
+	Temperature   float64          `json:"temperature,omitempty"`
+	MaxTokens     int              `json:"max_tokens,omitempty"`
+}
+
+type AgentMCPServer struct {
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type ConditionConfig struct {

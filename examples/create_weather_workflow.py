@@ -38,7 +38,7 @@ workflow = {
             "config": {
                 "code": {
                     "language": "javascript",
-                    "code": 'var text = ""; if (input.content) { for (var i = 0; i < input.content.length; i++) { if (input.content[i].text) text += input.content[i].text; } } return {weather_text: text};',
+                    "code": 'var text = ""; if (input.content) { for (var i = 0; i < input.content.length; i++) { if (input.content[i].text) text += input.content[i].text; } } var temp = 0; var m = text.match(/温度: (\\d+)/); if (m) { temp = parseInt(m[1], 10); } return {weather_text: text, temp: temp};',
                 }
             },
             "position": {"x": 250, "y": 310},
@@ -47,7 +47,7 @@ workflow = {
             "id": "node_4",
             "type": "condition",
             "name": "温度判断",
-            "config": {"condition": {"expression": "true"}},
+            "config": {"condition": {"expression": "temp > 35"}},
             "position": {"x": 250, "y": 440},
         },
         {
