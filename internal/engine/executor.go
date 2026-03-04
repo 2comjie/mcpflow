@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -394,7 +395,7 @@ func (e *emailExecutor) Execute(_ context.Context, node *model.Node, input map[s
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.SMTPHost)
 
-	if err := smtp.SendMail(addr, auth, cfg.From, allRecipients, msg.Bytes()); err != nil {
+	if err := sendMail(addr, auth, cfg.From, allRecipients, msg.Bytes(), cfg.SMTPHost, cfg.SMTPPort); err != nil {
 		return nil, fmt.Errorf("send email: %w", err)
 	}
 
@@ -432,4 +433,48 @@ func splitAddrs(s string) []string {
 		}
 	}
 	return addrs
+}
+
+// sendMail 发送邮件，支持 SSL (465) 和 STARTTLS (587/25)
+func sendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte, host string, port int) error {
+	if port == 465 {
+		// 隐式 TLS：QQ邮箱、163邮箱等使用 465 端口
+		tlsConfig := &tls.Config{ServerName: host}
+		conn, err := tls.Dial("tcp", addr, tlsConfig)
+		if err != nil {
+			return fmt.Errorf("tls dial: %w", err)
+		}
+		client, err := smtp.NewClient(conn, host)
+		if err != nil {
+			conn.Close()
+			return fmt.Errorf("smtp client: %w", err)
+		}
+		defer client.Close()
+
+		if err := client.Auth(auth); err != nil {
+			return fmt.Errorf("auth: %w", err)
+		}
+		if err := client.Mail(from); err != nil {
+			return fmt.Errorf("mail from: %w", err)
+		}
+		for _, addr := range to {
+			if err := client.Rcpt(addr); err != nil {
+				return fmt.Errorf("rcpt to %s: %w", addr, err)
+			}
+		}
+		w, err := client.Data()
+		if err != nil {
+			return fmt.Errorf("data: %w", err)
+		}
+		if _, err := w.Write(msg); err != nil {
+			return fmt.Errorf("write: %w", err)
+		}
+		if err := w.Close(); err != nil {
+			return fmt.Errorf("close data: %w", err)
+		}
+		return client.Quit()
+	}
+
+	// STARTTLS：587/25 端口，使用标准库
+	return smtp.SendMail(addr, auth, from, to, msg)
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Input, message, Tooltip, Divider, Form, Select, Tag, Spin } from 'antd'
+import { Button, Input, message, Tooltip, Divider, Form, Select, Tag, Spin, Modal } from 'antd'
 import {
   SaveOutlined,
   PlayCircleOutlined,
@@ -271,11 +271,22 @@ export default function WorkflowEditor() {
     }
   }
 
+  const [executeModalOpen, setExecuteModalOpen] = useState(false)
+  const [executeInput, setExecuteInput] = useState('{}')
+
   const handleExecute = async () => {
     if (isNew) return
+    let input: Record<string, any> = {}
     try {
-      const res: any = await workflowApi.execute(Number(id))
+      input = JSON.parse(executeInput)
+    } catch {
+      message.error('Invalid JSON input')
+      return
+    }
+    try {
+      const res: any = await workflowApi.execute(Number(id), input)
       message.success(`Execution started: #${res.execution_id}`)
+      setExecuteModalOpen(false)
     } catch (err: any) {
       message.error(err.message)
     }
@@ -452,26 +463,76 @@ export default function WorkflowEditor() {
           </Form.Item>
         )}
 
-        {/* 显示选中项的描述 */}
-        {config.tool_name && mcpTools.length > 0 && (() => {
+        {/* 显示选中工具的描述和参数输入 */}
+        {config.action === 'call_tool' && config.tool_name && mcpTools.length > 0 && (() => {
           const tool = mcpTools.find((t: any) => t.name === config.tool_name)
-          if (!tool?.description) return null
+          if (!tool) return null
+          const props = tool.inputSchema?.properties || {}
+          const required = tool.inputSchema?.required || []
+          const args = config.arguments || {}
           return (
-            <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
-              {tool.description}
-              {tool.inputSchema?.properties && (
-                <div style={{ marginTop: 4 }}>
-                  <span style={{ color: '#98a2b3' }}>Params: </span>
-                  {Object.keys(tool.inputSchema.properties).map((key) => (
-                    <Tag key={key} style={{ fontSize: 11, borderRadius: 4, marginBottom: 2 }}>
-                      {key}
-                      {tool.inputSchema.required?.includes(key) && <span style={{ color: '#f04438' }}>*</span>}
-                    </Tag>
-                  ))}
+            <>
+              {tool.description && (
+                <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f9fafb', borderRadius: 8 }}>
+                  {tool.description}
                 </div>
               )}
-            </div>
+              {Object.keys(props).map((key) => (
+                <Form.Item
+                  key={key}
+                  label={
+                    <span>
+                      {key}
+                      {required.includes(key) && <span style={{ color: '#f04438' }}> *</span>}
+                      {props[key].description && (
+                        <Tooltip title={props[key].description}>
+                          <span style={{ color: '#98a2b3', marginLeft: 4, fontSize: 11 }}>(?)</span>
+                        </Tooltip>
+                      )}
+                    </span>
+                  }
+                >
+                  <Input
+                    value={args[key] ?? ''}
+                    onChange={(e) => {
+                      const newArgs = { ...args, [key]: e.target.value }
+                      updateNodeConfig('mcp.arguments', newArgs)
+                    }}
+                    placeholder={props[key].description || `Enter ${key}`}
+                    style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+                  />
+                </Form.Item>
+              ))}
+            </>
           )
+        })()}
+
+        {/* get_prompt 参数输入 */}
+        {config.action === 'get_prompt' && config.prompt_name && mcpPrompts.length > 0 && (() => {
+          const prompt = mcpPrompts.find((p: any) => p.name === config.prompt_name)
+          if (!prompt?.arguments?.length) return null
+          const args = config.prompt_args || {}
+          return prompt.arguments.map((arg: any) => (
+            <Form.Item
+              key={arg.name}
+              label={
+                <span>
+                  {arg.name}
+                  {arg.required && <span style={{ color: '#f04438' }}> *</span>}
+                </span>
+              }
+            >
+              <Input
+                value={args[arg.name] ?? ''}
+                onChange={(e) => {
+                  const newArgs = { ...args, [arg.name]: e.target.value }
+                  updateNodeConfig('mcp.prompt_args', newArgs)
+                }}
+                placeholder={arg.description || `Enter ${arg.name}`}
+                style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
+              />
+            </Form.Item>
+          ))
         })()}
       </>
     )
@@ -572,7 +633,7 @@ export default function WorkflowEditor() {
         </div>
         <div className="editor-toolbar-right">
           {!isNew && (
-            <Button icon={<PlayCircleOutlined />} onClick={handleExecute} style={{ borderRadius: 8 }}>
+            <Button icon={<PlayCircleOutlined />} onClick={() => setExecuteModalOpen(true)} style={{ borderRadius: 8 }}>
               Run
             </Button>
           )}
@@ -698,66 +759,6 @@ export default function WorkflowEditor() {
                 </Form.Item>
 
                 <Divider style={{ margin: '12px 0' }} />
-
-                {/* 可用变量提示 */}
-                {!['start', 'end'].includes((selectedNode.data as any).nodeType) && (() => {
-                  // 找到所有上游节点（通过 edges 反向查找）
-                  const getUpstream = (nodeId: string, visited = new Set<string>()): FlowNode[] => {
-                    if (visited.has(nodeId)) return []
-                    visited.add(nodeId)
-                    const result: FlowNode[] = []
-                    for (const e of edges) {
-                      if (e.target === nodeId) {
-                        const srcNode = nodes.find((n) => n.id === e.source)
-                        if (srcNode) {
-                          result.push(srcNode)
-                          result.push(...getUpstream(srcNode.id, visited))
-                        }
-                      }
-                    }
-                    return result
-                  }
-                  const upstream = getUpstream(selectedNode.id)
-                  const outputHints: Record<string, string[]> = {
-                    start: ['(workflow input fields)'],
-                    llm: ['content', 'model', 'total_tokens'],
-                    mcp: ['content', '...'],
-                    code: ['(depends on code return)'],
-                    http: ['status_code', 'body', 'json'],
-                    condition: ['branch'],
-                    email: ['status', 'to', 'subject'],
-                  }
-                  return (
-                    <div style={{
-                      background: '#f0f5ff',
-                      border: '1px solid #d6e4ff',
-                      borderRadius: 8,
-                      padding: '8px 12px',
-                      marginBottom: 12,
-                      fontSize: 12,
-                    }}>
-                      <div style={{ fontWeight: 600, marginBottom: 4, color: '#1d39c4' }}>
-                        Available Variables
-                      </div>
-                      <div style={{ color: '#4e5969', lineHeight: 1.8 }}>
-                        <div><code style={{ background: '#e6f4ff', padding: '1px 4px', borderRadius: 3 }}>{'{{.input.xxx}}'}</code> workflow input</div>
-                        {upstream.filter((n) => (n.data as any).nodeType !== 'start').map((n) => {
-                          const nType = (n.data as any).nodeType as string
-                          const hints = outputHints[nType] || ['...']
-                          return (
-                            <div key={n.id}>
-                              <code style={{ background: '#e6f4ff', padding: '1px 4px', borderRadius: 3 }}>
-                                {'{{.' + n.id + '.xxx}}'}
-                              </code>
-                              {' '}{(n.data as any).label || n.id}
-                              <span style={{ color: '#8c8c8c' }}> → {hints.join(', ')}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )
-                })()}
 
                 {(selectedNode.data as any).nodeType === 'llm' && renderLLMPanel()}
                 {(selectedNode.data as any).nodeType === 'mcp' && renderMCPPanel()}
@@ -930,6 +931,25 @@ export default function WorkflowEditor() {
           </div>
         )}
       </div>
+
+      <Modal
+        title="Execute Workflow"
+        open={executeModalOpen}
+        onCancel={() => setExecuteModalOpen(false)}
+        onOk={handleExecute}
+        okText="Execute"
+      >
+        <div style={{ marginBottom: 8, color: '#667085', fontSize: 13 }}>
+          Input parameters (JSON):
+        </div>
+        <Input.TextArea
+          value={executeInput}
+          onChange={(e) => setExecuteInput(e.target.value)}
+          rows={6}
+          placeholder='{"city": "Beijing"}'
+          style={{ fontFamily: 'monospace', fontSize: 12, borderRadius: 8 }}
+        />
+      </Modal>
     </div>
   )
 }
