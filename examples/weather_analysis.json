@@ -1,0 +1,121 @@
+{
+  "name": "智能天气分析助手",
+  "description": "综合示例工作流：查询天气 → 解析数据 → 条件判断 → 高温走 LLM 生成预警报告，低温走翻译输出多语言天气。覆盖 start/end/mcp/code/condition/llm 6 种节点类型。",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": "开始",
+      "config": {},
+      "position": { "x": 300, "y": 0 }
+    },
+    {
+      "id": "mcp_weather",
+      "type": "mcp",
+      "name": "查询天气",
+      "config": {
+        "mcp": {
+          "action": "call_tool",
+          "server_url": "http://localhost:3002/mcp",
+          "tool_name": "get_weather",
+          "arguments": {
+            "city": "{{.input.city}}"
+          }
+        }
+      },
+      "position": { "x": 300, "y": 120 },
+      "timeout": 30
+    },
+    {
+      "id": "code_parse",
+      "type": "code",
+      "name": "解析天气数据",
+      "config": {
+        "code": {
+          "language": "javascript",
+          "code": "var text = '';\nif (input.content && input.content.length > 0) {\n  text = input.content[0].text || '';\n} else {\n  text = JSON.stringify(input);\n}\nvar tempMatch = text.match(/(\\d+)\\s*°C/);\nvar temperature = tempMatch ? parseInt(tempMatch[1]) : 20;\nreturn {\n  temperature: temperature,\n  weather_text: text,\n  summary: '温度: ' + temperature + '°C'\n};"
+        }
+      },
+      "position": { "x": 300, "y": 260 }
+    },
+    {
+      "id": "condition_hot",
+      "type": "condition",
+      "name": "是否高温 (>30°C)",
+      "config": {
+        "condition": {
+          "expression": "temperature > 30"
+        }
+      },
+      "position": { "x": 300, "y": 400 }
+    },
+    {
+      "id": "mcp_read_config",
+      "type": "mcp",
+      "name": "读取系统配置",
+      "config": {
+        "mcp": {
+          "action": "read_resource",
+          "server_url": "http://localhost:3002/mcp",
+          "resource_uri": "file:///config/app.yaml"
+        }
+      },
+      "position": { "x": 80, "y": 560 },
+      "timeout": 15
+    },
+    {
+      "id": "llm_report",
+      "type": "llm",
+      "name": "生成高温预警报告",
+      "config": {
+        "llm": {
+          "base_url": "https://api.deepseek.com/v1",
+          "api_key": "YOUR_API_KEY",
+          "model": "deepseek-chat",
+          "system_msg": "你是一个专业的气象分析师，请根据天气数据生成简洁的高温预警报告。",
+          "prompt": "当前天气数据：{{.code_parse.weather_text}}\n温度：{{.code_parse.temperature}}°C\n\n请生成一份高温预警报告，包含：\n1. 当前天气概况\n2. 高温风险等级\n3. 防暑降温建议",
+          "temperature": 0.7,
+          "max_tokens": 500
+        }
+      },
+      "position": { "x": 80, "y": 700 },
+      "timeout": 60,
+      "retry": { "max": 1, "interval": 3 }
+    },
+    {
+      "id": "mcp_translate",
+      "type": "mcp",
+      "name": "翻译天气信息",
+      "config": {
+        "mcp": {
+          "action": "call_tool",
+          "server_url": "http://localhost:3002/mcp",
+          "tool_name": "translate",
+          "arguments": {
+            "text": "{{.code_parse.weather_text}}",
+            "target_lang": "{{.input.target_lang}}"
+          }
+        }
+      },
+      "position": { "x": 520, "y": 560 },
+      "timeout": 30
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": "结束",
+      "config": {},
+      "position": { "x": 300, "y": 880 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "mcp_weather" },
+    { "id": "e2", "source": "mcp_weather", "target": "code_parse" },
+    { "id": "e3", "source": "code_parse", "target": "condition_hot" },
+    { "id": "e4", "source": "condition_hot", "target": "mcp_read_config", "condition": "true" },
+    { "id": "e5", "source": "condition_hot", "target": "mcp_translate", "condition": "false" },
+    { "id": "e6", "source": "mcp_read_config", "target": "llm_report" },
+    { "id": "e7", "source": "llm_report", "target": "end" },
+    { "id": "e8", "source": "mcp_translate", "target": "end" }
+  ]
+}

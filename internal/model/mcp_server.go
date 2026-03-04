@@ -8,7 +8,7 @@ type MCPServer struct {
 	Description string     `json:"description" gorm:"type:text"`
 	URL         string     `json:"url" gorm:"size:512;not null"`
 	Headers     JSON       `json:"headers" gorm:"type:json"`
-	Status      string     `json:"status" gorm:"size:20;default:active"`
+	Status      string     `json:"status" gorm:"size:20;default:inactive"`
 	Tools       JSON       `json:"tools" gorm:"type:json"`
 	Prompts     JSON       `json:"prompts" gorm:"type:json"`
 	Resources   JSON       `json:"resources" gorm:"type:json"`

@@ -79,6 +79,8 @@ func (a *API) TestMCPServer(c *gin.Context) {
 
 	// 测试连接
 	if _, err := a.mcp.TestConnection(c.Request.Context(), srv.URL, headers); err != nil {
+		now := time.Now()
+		a.store.UpdateMCPServerCache(srv.ID, map[string]any{"status": "inactive", "checked_at": now})
 		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
 		return
 	}

@@ -146,6 +146,20 @@ func handleRPC(w http.ResponseWriter, r *http.Request) {
 	}
 
 	switch req.Method {
+	case "initialize":
+		result = map[string]any{
+			"protocolVersion": "2024-11-05",
+			"capabilities": map[string]any{
+				"tools":     map[string]any{},
+				"prompts":   map[string]any{},
+				"resources": map[string]any{},
+			},
+			"serverInfo": map[string]any{
+				"name":    "test-mcp-server",
+				"version": "1.0.0",
+			},
+		}
+
 	case "tools/list":
 		result = map[string]any{"tools": sampleTools}
 
@@ -355,7 +369,7 @@ func writeError(w http.ResponseWriter, id any, code int, msg string) {
 }
 
 func main() {
-	addr := ":3001"
+	addr := ":3002"
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", handleRPC)
@@ -370,7 +384,7 @@ func main() {
 	})
 
 	log.Printf("Test MCP Server starting on %s", addr)
-	log.Printf("Endpoint: http://localhost%s/mcp", addr)
+	log.Printf("Endpoint: http://localhost%s/mcp  (change port if conflicts)", addr)
 	log.Printf("Tools: %d, Prompts: %d, Resources: %d",
 		len(sampleTools), len(samplePrompts), len(sampleResources))
 
