@@ -20,7 +20,3 @@ type MCPServer struct {
 	CreatedAt   time.Time         `json:"created_at" bson:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at" bson:"updated_at"`
 }
-
-func (s *MCPServer) GetHeadersMap() map[string]string {
-	return s.Headers
-}

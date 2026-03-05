@@ -11,15 +11,13 @@ type NodeType string
 const (
 	NodeStart     NodeType = "start"
 	NodeEnd       NodeType = "end"
-	NodeCondition NodeType = "condition"
-	NodeCode      NodeType = "code"
 	NodeLLM       NodeType = "llm"
 	NodeAgent     NodeType = "agent"
+	NodeCondition NodeType = "condition"
+	NodeCode      NodeType = "code"
 	NodeHTTP      NodeType = "http"
 	NodeEmail     NodeType = "email"
 )
-
-// ==================== Workflow ====================
 
 type Workflow struct {
 	ID          bson.ObjectID `json:"id" bson:"_id,omitempty"`
@@ -31,21 +29,12 @@ type Workflow struct {
 	UpdatedAt   time.Time     `json:"updated_at" bson:"updated_at"`
 }
 
-// ==================== Node ====================
-
 type Node struct {
 	ID       string     `json:"id" bson:"id"`
 	Type     NodeType   `json:"type" bson:"type"`
 	Name     string     `json:"name" bson:"name"`
 	Config   NodeConfig `json:"config" bson:"config"`
 	Position Position   `json:"position" bson:"position"`
-	Timeout  int        `json:"timeout,omitempty" bson:"timeout,omitempty"`
-	Retry    *Retry     `json:"retry,omitempty" bson:"retry,omitempty"`
-}
-
-type Retry struct {
-	Max      int `json:"max" bson:"max"`
-	Interval int `json:"interval" bson:"interval"`
 }
 
 type Edge struct {
@@ -60,8 +49,6 @@ type Position struct {
 	Y float64 `json:"y" bson:"y"`
 }
 
-// ==================== NodeConfig ====================
-
 type NodeConfig struct {
 	LLM       *LLMConfig       `json:"llm,omitempty" bson:"llm,omitempty"`
 	Agent     *AgentConfig     `json:"agent,omitempty" bson:"agent,omitempty"`
@@ -72,13 +59,14 @@ type NodeConfig struct {
 }
 
 type LLMConfig struct {
-	BaseURL     string  `json:"base_url" bson:"base_url"`
-	APIKey      string  `json:"api_key" bson:"api_key"`
-	Model       string  `json:"model" bson:"model"`
-	Prompt      string  `json:"prompt" bson:"prompt"`
-	SystemMsg   string  `json:"system_msg,omitempty" bson:"system_msg,omitempty"`
-	Temperature float64 `json:"temperature,omitempty" bson:"temperature,omitempty"`
-	MaxTokens   int     `json:"max_tokens,omitempty" bson:"max_tokens,omitempty"`
+	BaseURL      string         `json:"base_url" bson:"base_url"`
+	APIKey       string         `json:"api_key" bson:"api_key"`
+	Model        string         `json:"model" bson:"model"`
+	Prompt       string         `json:"prompt" bson:"prompt"`
+	SystemMsg    string         `json:"system_msg,omitempty" bson:"system_msg,omitempty"`
+	Temperature  float64        `json:"temperature,omitempty" bson:"temperature,omitempty"`
+	MaxTokens    int            `json:"max_tokens,omitempty" bson:"max_tokens,omitempty"`
+	OutputSchema map[string]any `json:"output_schema,omitempty" bson:"output_schema,omitempty"`
 }
 
 type AgentConfig struct {

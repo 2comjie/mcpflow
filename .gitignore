@@ -1,2 +1,5 @@
 .idea/**
 .密钥.txt
+/server
+web/node_modules/
+web/dist/

@@ -1,6 +1,0 @@
-web/node_modules
-web/dist
-.git
-*.md
-cmd/debug_agent
-cmd/testmcp
