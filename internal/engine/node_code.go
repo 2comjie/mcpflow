@@ -46,7 +46,9 @@ func executeJS(code string, ctx *WorkflowContext) (any, error) {
 		return v
 	})
 
-	val, err := vm.RunString(code)
+	// 包装为函数调用，支持 return 语句
+	wrapped := "(function() {\n" + code + "\n})()"
+	val, err := vm.RunString(wrapped)
 	if err != nil {
 		return nil, fmt.Errorf("js execution error: %w", err)
 	}

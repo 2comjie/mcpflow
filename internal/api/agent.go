@@ -21,6 +21,7 @@ type AgentChatRequest struct {
 	MCPServerIDs  []string `json:"mcp_server_ids"`
 	Message       string   `json:"message"`
 	SystemMsg     string   `json:"system_msg"`
+	Model         string   `json:"model"`
 	MaxIterations int      `json:"max_iterations"`
 	Temperature   float64  `json:"temperature"`
 	MaxTokens     int      `json:"max_tokens"`
@@ -48,8 +49,22 @@ func (a *API) AgentChat(c *gin.Context) {
 		fail(c, 404, "llm provider not found")
 		return
 	}
+	if provider.BaseURL == "" {
+		fail(c, 400, "llm provider base_url is empty")
+		return
+	}
 
-	// 获取 MCP Servers
+	// 确定模型
+	modelName := req.Model
+	if modelName == "" && len(provider.Models) > 0 {
+		modelName = provider.Models[0]
+	}
+	if modelName == "" {
+		fail(c, 400, "no model specified and provider has no models configured")
+		return
+	}
+
+	// 获取 MCP Servers（可选）
 	var mcpServers []model.AgentMCPServer
 	for _, idStr := range req.MCPServerIDs {
 		srvID, err := bson.ObjectIDFromHex(idStr)
@@ -101,7 +116,7 @@ func (a *API) AgentChat(c *gin.Context) {
 
 	for i := 0; i < maxIter; i++ {
 		reqBody := map[string]any{
-			"model":    provider.Models[0],
+			"model":    modelName,
 			"messages": messages,
 		}
 		if len(tools) > 0 {

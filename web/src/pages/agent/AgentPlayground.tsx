@@ -22,6 +22,7 @@ export default function AgentPlayground() {
   const [providers, setProviders] = useState<LLMProvider[]>([])
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([])
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
   const [selectedServers, setSelectedServers] = useState<string[]>([])
   const [systemMsg, setSystemMsg] = useState('')
   const [temperature, setTemperature] = useState(0.7)
@@ -48,11 +49,6 @@ export default function AgentPlayground() {
       message.warning('Please select an LLM Provider')
       return
     }
-    if (selectedServers.length === 0) {
-      message.warning('Please select at least one MCP Server')
-      return
-    }
-
     const userMsg = inputValue.trim()
     setInputValue('')
     setMessages((prev) => [...prev, { role: 'user', content: userMsg }])
@@ -64,6 +60,7 @@ export default function AgentPlayground() {
         mcp_server_ids: selectedServers,
         message: userMsg,
         system_msg: systemMsg || undefined,
+        model: selectedModel || undefined,
         temperature,
         max_tokens: maxTokens,
         max_iterations: maxIterations,
@@ -120,14 +117,34 @@ export default function AgentPlayground() {
               placeholder="Select LLM Provider"
               style={{ width: '100%' }}
               value={selectedProvider}
-              onChange={setSelectedProvider}
+              onChange={(v) => {
+                setSelectedProvider(v)
+                setSelectedModel(null)
+              }}
               options={providers.map((p) => ({ label: p.name, value: p.id }))}
             />
           </div>
 
           <div style={{ marginBottom: 16 }}>
             <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
-              MCP Servers *
+              Model *
+            </Text>
+            <Select
+              placeholder="Select Model"
+              style={{ width: '100%' }}
+              value={selectedModel}
+              onChange={setSelectedModel}
+              options={
+                providers
+                  .find((p) => p.id === selectedProvider)
+                  ?.models?.map((m) => ({ label: m, value: m })) || []
+              }
+            />
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>
+              MCP Servers (optional)
             </Text>
             <Select
               mode="multiple"
@@ -236,7 +253,7 @@ export default function AgentPlayground() {
               <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
               <div style={{ fontSize: 16 }}>Start a conversation with the Agent</div>
               <div style={{ fontSize: 12, marginTop: 4 }}>
-                Select LLM Provider and MCP Servers, then send a message
+                Select LLM Provider, then send a message. MCP Servers are optional.
               </div>
             </div>
           )}

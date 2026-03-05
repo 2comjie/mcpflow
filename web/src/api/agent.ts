@@ -5,6 +5,7 @@ export interface AgentChatRequest {
   mcp_server_ids: string[]
   message: string
   system_msg?: string
+  model?: string
   max_iterations?: number
   temperature?: number
   max_tokens?: number
