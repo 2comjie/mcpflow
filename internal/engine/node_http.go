@@ -20,12 +20,15 @@ func executeHTTP(cfg *model.HTTPConfig, ctx *WorkflowContext) (any, error) {
 		method = "GET"
 	}
 
+	url := resolveTemplate(cfg.URL, ctx)
+	body := resolveTemplate(cfg.Body, ctx)
+
 	var bodyReader io.Reader
-	if cfg.Body != "" {
-		bodyReader = strings.NewReader(cfg.Body)
+	if body != "" {
+		bodyReader = strings.NewReader(body)
 	}
 
-	req, err := http.NewRequest(method, cfg.URL, bodyReader)
+	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -40,7 +43,7 @@ func executeHTTP(cfg *model.HTTPConfig, ctx *WorkflowContext) (any, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
@@ -52,10 +55,10 @@ func executeHTTP(cfg *model.HTTPConfig, ctx *WorkflowContext) (any, error) {
 
 	// 尝试解析 JSON
 	var jsonBody any
-	if err := json.Unmarshal(body, &jsonBody); err == nil {
+	if err := json.Unmarshal(respBody, &jsonBody); err == nil {
 		result["body"] = jsonBody
 	} else {
-		result["body"] = string(body)
+		result["body"] = string(respBody)
 	}
 
 	return result, nil

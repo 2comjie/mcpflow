@@ -1,7 +1,10 @@
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
@@ -39,18 +42,34 @@ func (e *Engine) ExecuteWorkflow(wf *model.Workflow, input map[string]any) (*mod
 	for i := range wf.Nodes {
 		nodeMap[wf.Nodes[i].ID] = &wf.Nodes[i]
 	}
+
+	// 构建反向边：target -> []source 信息
+	reverseEdges := buildReverseEdgeMap(wf.Edges)
 	edgeMap := buildEdgeMap(wf.Edges)
 
-	// ctx 存储节点间传递的数据，key 为 node_id
+	// ctx 存储节点间传递的数据
 	ctx := &WorkflowContext{
 		Input:      input,
 		NodeOutput: make(map[string]any),
 		EdgeMap:    edgeMap,
+		ExecOrder:  order,
 	}
+
+	skipped := make(map[string]bool)
 
 	for _, nodeID := range order {
 		node := nodeMap[nodeID]
 		if node == nil {
+			continue
+		}
+
+		// 检查是否应该跳过（条件分支控制）
+		if shouldSkip(nodeID, reverseEdges, ctx, skipped) {
+			skipped[nodeID] = true
+			exec.NodeStates[node.ID] = NodeState{
+				NodeID: node.ID,
+				Status: "skipped",
+			}
 			continue
 		}
 
@@ -91,17 +110,7 @@ func (e *Engine) ExecuteWorkflow(wf *model.Workflow, input map[string]any) (*mod
 			return e.failExecution(exec, err)
 		}
 
-		// 条件节点：决定走哪条边
-		if node.Type == model.NodeCondition {
-			ctx.NodeOutput[node.ID] = output
-			condResult, _ := output.(bool)
-			ctx.ConditionResults = append(ctx.ConditionResults, ConditionResult{
-				NodeID: node.ID,
-				Result: condResult,
-			})
-		} else {
-			ctx.NodeOutput[node.ID] = output
-		}
+		ctx.NodeOutput[node.ID] = output
 	}
 
 	// 完成
@@ -157,10 +166,10 @@ func (e *Engine) executeNode(node *model.Node, ctx *WorkflowContext) (any, error
 
 // WorkflowContext 工作流执行上下文
 type WorkflowContext struct {
-	Input            map[string]any
-	NodeOutput       map[string]any
-	EdgeMap          map[string][]EdgeInfo
-	ConditionResults []ConditionResult
+	Input      map[string]any
+	NodeOutput map[string]any
+	EdgeMap    map[string][]EdgeInfo
+	ExecOrder  []string // 拓扑排序后的节点顺序
 }
 
 type EdgeInfo struct {
@@ -168,9 +177,9 @@ type EdgeInfo struct {
 	Condition string
 }
 
-type ConditionResult struct {
-	NodeID string
-	Result bool
+type ReverseEdgeInfo struct {
+	SourceID  string
+	Condition string
 }
 
 type NodeState = model.NodeState
@@ -184,6 +193,53 @@ func buildEdgeMap(edges []model.Edge) map[string][]EdgeInfo {
 		})
 	}
 	return m
+}
+
+func buildReverseEdgeMap(edges []model.Edge) map[string][]ReverseEdgeInfo {
+	m := make(map[string][]ReverseEdgeInfo)
+	for _, e := range edges {
+		m[e.Target] = append(m[e.Target], ReverseEdgeInfo{
+			SourceID:  e.Source,
+			Condition: e.Condition,
+		})
+	}
+	return m
+}
+
+// shouldSkip 判断节点是否应该被跳过
+// 规则：如果入边带有条件标签（"true"/"false"），检查条件节点的输出是否匹配
+func shouldSkip(nodeID string, reverseEdges map[string][]ReverseEdgeInfo, ctx *WorkflowContext, skipped map[string]bool) bool {
+	inEdges := reverseEdges[nodeID]
+	if len(inEdges) == 0 {
+		return false
+	}
+
+	for _, edge := range inEdges {
+		// 如果上游节点被跳过，当前节点也跳过
+		if skipped[edge.SourceID] {
+			return true
+		}
+
+		// 如果边有条件标签，检查条件节点的输出
+		if edge.Condition != "" {
+			output, exists := ctx.NodeOutput[edge.SourceID]
+			if !exists {
+				return true
+			}
+			condResult, ok := output.(bool)
+			if !ok {
+				continue
+			}
+			// edge.Condition 为 "true" 或 "false"
+			if edge.Condition == "true" && !condResult {
+				return true
+			}
+			if edge.Condition == "false" && condResult {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // topoSort 对节点进行拓扑排序
@@ -225,13 +281,15 @@ func topoSort(nodes []model.Node, edges []model.Edge) ([]string, error) {
 	return order, nil
 }
 
-// getPreviousOutput 获取上一个节点的输出（用于节点间数据传递）
+// getPreviousOutput 获取上一个已执行节点的输出（按拓扑顺序）
 func getPreviousOutput(ctx *WorkflowContext) any {
-	var last any
-	for _, v := range ctx.NodeOutput {
-		last = v
+	for i := len(ctx.ExecOrder) - 1; i >= 0; i-- {
+		nodeID := ctx.ExecOrder[i]
+		if output, ok := ctx.NodeOutput[nodeID]; ok {
+			return output
+		}
 	}
-	return last
+	return ctx.Input
 }
 
 func toMapAny(v any) map[string]any {
@@ -244,3 +302,68 @@ func toMapAny(v any) map[string]any {
 	return map[string]any{"result": v}
 }
 
+// resolveTemplate 模板替换，支持 {{input.xxx}} 和 {{nodes.node_id.xxx}} 和 {{nodes.node_id}}
+var tmplPattern = regexp.MustCompile(`\{\{(\w+(?:\.\w+)*)\}\}`)
+
+func resolveTemplate(tmpl string, ctx *WorkflowContext) string {
+	if tmpl == "" || !strings.Contains(tmpl, "{{") {
+		return tmpl
+	}
+
+	return tmplPattern.ReplaceAllStringFunc(tmpl, func(match string) string {
+		path := match[2 : len(match)-2] // 去掉 {{ 和 }}
+		parts := strings.SplitN(path, ".", 2)
+
+		switch parts[0] {
+		case "input":
+			if len(parts) == 1 {
+				return jsonString(ctx.Input)
+			}
+			val := getNestedValue(ctx.Input, parts[1])
+			if val != nil {
+				return fmt.Sprintf("%v", val)
+			}
+		case "nodes":
+			if len(parts) == 1 {
+				return jsonString(ctx.NodeOutput)
+			}
+			// parts[1] 可以是 "node_id" 或 "node_id.field"
+			subParts := strings.SplitN(parts[1], ".", 2)
+			nodeOutput, ok := ctx.NodeOutput[subParts[0]]
+			if !ok {
+				return match
+			}
+			if len(subParts) == 1 {
+				return jsonString(nodeOutput)
+			}
+			if m, ok := nodeOutput.(map[string]any); ok {
+				val := getNestedValue(m, subParts[1])
+				if val != nil {
+					return fmt.Sprintf("%v", val)
+				}
+			}
+		}
+		return match
+	})
+}
+
+func getNestedValue(m map[string]any, path string) any {
+	parts := strings.Split(path, ".")
+	var current any = m
+	for _, p := range parts {
+		cm, ok := current.(map[string]any)
+		if !ok {
+			return nil
+		}
+		current = cm[p]
+	}
+	return current
+}
+
+func jsonString(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("%v", v)
+	}
+	return string(b)
+}

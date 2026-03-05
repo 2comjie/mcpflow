@@ -45,11 +45,14 @@ func executeAgent(cfg *model.AgentConfig, ctx *WorkflowContext) (any, error) {
 		toolClientMap[name] = c
 	}
 
+	prompt := resolveTemplate(cfg.Prompt, ctx)
+	systemMsg := resolveTemplate(cfg.SystemMsg, ctx)
+
 	messages := []map[string]any{}
-	if cfg.SystemMsg != "" {
-		messages = append(messages, map[string]any{"role": "system", "content": cfg.SystemMsg})
+	if systemMsg != "" {
+		messages = append(messages, map[string]any{"role": "system", "content": systemMsg})
 	}
-	messages = append(messages, map[string]any{"role": "user", "content": cfg.Prompt})
+	messages = append(messages, map[string]any{"role": "user", "content": prompt})
 
 	var steps []model.AgentStep
 

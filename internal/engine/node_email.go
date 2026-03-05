@@ -18,22 +18,26 @@ func executeEmail(cfg *model.EmailConfig, ctx *WorkflowContext) (any, error) {
 		contentType = "text/plain"
 	}
 
+	to := resolveTemplate(cfg.To, ctx)
+	subject := resolveTemplate(cfg.Subject, ctx)
+	body := resolveTemplate(cfg.Body, ctx)
+
 	// 构建收件人列表
-	toList := strings.Split(cfg.To, ",")
+	toList := strings.Split(to, ",")
 	for i := range toList {
 		toList[i] = strings.TrimSpace(toList[i])
 	}
 
 	// 构建邮件内容
-	header := fmt.Sprintf("From: %s\r\nTo: %s\r\n", cfg.From, cfg.To)
+	header := fmt.Sprintf("From: %s\r\nTo: %s\r\n", cfg.From, to)
 	if cfg.Cc != "" {
 		header += fmt.Sprintf("Cc: %s\r\n", cfg.Cc)
 	}
-	header += fmt.Sprintf("Subject: %s\r\n", cfg.Subject)
+	header += fmt.Sprintf("Subject: %s\r\n", subject)
 	header += fmt.Sprintf("Content-Type: %s; charset=UTF-8\r\n", contentType)
 	header += "\r\n"
 
-	msg := []byte(header + cfg.Body)
+	msg := []byte(header + body)
 
 	addr := fmt.Sprintf("%s:%d", cfg.SMTPHost, cfg.SMTPPort)
 	auth := smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.SMTPHost)

@@ -15,11 +15,14 @@ func executeLLM(cfg *model.LLMConfig, ctx *WorkflowContext) (any, error) {
 		return nil, fmt.Errorf("llm config is nil")
 	}
 
+	prompt := resolveTemplate(cfg.Prompt, ctx)
+	systemMsg := resolveTemplate(cfg.SystemMsg, ctx)
+
 	messages := []map[string]string{}
-	if cfg.SystemMsg != "" {
-		messages = append(messages, map[string]string{"role": "system", "content": cfg.SystemMsg})
+	if systemMsg != "" {
+		messages = append(messages, map[string]string{"role": "system", "content": systemMsg})
 	}
-	messages = append(messages, map[string]string{"role": "user", "content": cfg.Prompt})
+	messages = append(messages, map[string]string{"role": "user", "content": prompt})
 
 	reqBody := map[string]any{
 		"model":    cfg.Model,
