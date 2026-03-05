@@ -243,17 +243,14 @@ export default function AllExecutions() {
                           {log.error}
                         </div>
                       )}
-                      {log.node_type === 'agent' && log.output?.agent_steps ? (
+                      {log.node_type === 'agent' && (log.agent_steps?.length > 0 || log.output?.agent_steps) ? (
                         <>
-                          {log.output.content && (
+                          {log.output?.content && (
                             <div style={{ fontSize: 12, color: '#344054', marginTop: 4, padding: '4px 8px', background: '#f0fdf4', borderRadius: 4, border: '1px solid #bbf7d0' }}>
                               {log.output.content.length > 300 ? log.output.content.slice(0, 300) + '...' : log.output.content}
                             </div>
                           )}
-                          <div style={{ fontSize: 11, color: '#98a2b3', marginTop: 4 }}>
-                            {log.output.iterations} iterations, {log.output.tool_calls_count} tool calls, {log.output.total_tokens} tokens
-                          </div>
-                          <AgentStepsView steps={log.output.agent_steps} />
+                          <AgentStepsView steps={log.agent_steps || log.output?.agent_steps} />
                         </>
                       ) : log.output && Object.keys(log.output).length > 0 ? (
                         <pre

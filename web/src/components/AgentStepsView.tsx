@@ -9,7 +9,8 @@ import {
 } from '@ant-design/icons'
 
 interface AgentStep {
-  step: number
+  step?: number
+  iteration?: number
   type: string
   server_url?: string
   tools?: string[]
@@ -18,11 +19,12 @@ interface AgentStep {
   has_tool_calls?: boolean
   tool_calls_count?: number
   content_preview?: string
+  content?: string
   tool_name?: string
   tool_args?: any
   tool_result?: string
   tool_error?: string
-  duration: number
+  duration?: number
 }
 
 const stepIcon: Record<string, { icon: React.ReactNode; color: string }> = {
@@ -30,6 +32,7 @@ const stepIcon: Record<string, { icon: React.ReactNode; color: string }> = {
   llm_call: { icon: <RobotOutlined />, color: '#7c3aed' },
   tool_call: { icon: <ToolOutlined />, color: '#0891b2' },
   final_response: { icon: <CheckCircleOutlined />, color: '#12b76a' },
+  response: { icon: <CheckCircleOutlined />, color: '#12b76a' },
 }
 
 export default function AgentStepsView({ steps }: { steps: AgentStep[] }) {
@@ -58,7 +61,7 @@ export default function AgentStepsView({ steps }: { steps: AgentStep[] }) {
               <StepContent step={s} />
             </div>
             <div style={{ fontSize: 11, color: '#98a2b3', flexShrink: 0 }}>
-              {s.duration > 0 ? `${s.duration}ms` : ''}
+              {(s.duration ?? 0) > 0 ? `${s.duration}ms` : ''}
             </div>
           </div>
         )
@@ -122,12 +125,13 @@ function StepContent({ step }: { step: AgentStep }) {
       )
 
     case 'final_response':
+    case 'response':
       return (
         <div style={{ fontSize: 12 }}>
           <span style={{ color: '#12b76a', fontWeight: 500 }}>Final Response</span>
-          {step.content_preview && (
+          {(step.content_preview || step.content) && (
             <div style={{ color: '#667085', marginTop: 4, fontSize: 11, lineHeight: 1.4 }}>
-              {step.content_preview}
+              {(() => { const text = step.content_preview || step.content || ''; return text.length > 200 ? text.slice(0, 200) + '...' : text })()}
             </div>
           )}
         </div>
