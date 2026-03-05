@@ -63,6 +63,38 @@ func (s *Store) DeleteExecution(id uint) error {
 	})
 }
 
+func (s *Store) GetExecutionStats() (map[string]any, error) {
+	stats := map[string]any{}
+
+	var totalExec int64
+	s.db.Model(&model.Execution{}).Count(&totalExec)
+	stats["total_executions"] = totalExec
+
+	var successExec int64
+	s.db.Model(&model.Execution{}).Where("status = ?", model.ExecCompleted).Count(&successExec)
+	stats["success_count"] = successExec
+
+	var failedExec int64
+	s.db.Model(&model.Execution{}).Where("status = ?", model.ExecFailed).Count(&failedExec)
+	stats["failed_count"] = failedExec
+
+	if totalExec > 0 {
+		stats["success_rate"] = float64(successExec) / float64(totalExec) * 100
+	} else {
+		stats["success_rate"] = 0.0
+	}
+
+	var avgDuration float64
+	s.db.Model(&model.ExecutionLog{}).Where("status = ?", "completed").Select("COALESCE(AVG(duration), 0)").Row().Scan(&avgDuration)
+	stats["avg_duration_ms"] = avgDuration
+
+	var recent []model.Execution
+	s.db.Model(&model.Execution{}).Order("id DESC").Limit(5).Find(&recent)
+	stats["recent_executions"] = recent
+
+	return stats, nil
+}
+
 func (s *Store) CreateLog(log *model.ExecutionLog) error {
 	return s.db.Create(log).Error
 }

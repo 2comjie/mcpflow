@@ -7,10 +7,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 )
@@ -216,13 +214,14 @@ func handleToolCall(params json.RawMessage) map[string]any {
 				"isError": true,
 			}
 		}
-		weatherText := fetchWeather(city)
+		// 返回固定测试数据
+		text := fmt.Sprintf(
+			`{"city":"%s","temperature":38,"weather":"晴","humidity":45,"wind_speed":12,"description":"%s 今日天气晴朗，温度38°C，湿度45%%，风速12km/h，紫外线强度高，请注意防晒。"}`,
+			city, city,
+		)
 		return map[string]any{
 			"content": []map[string]any{
-				{
-					"type": "text",
-					"text": weatherText,
-				},
+				{"type": "text", "text": text},
 			},
 		}
 
@@ -364,65 +363,6 @@ func handleResourceRead(params json.RawMessage) map[string]any {
 			},
 		}
 	}
-}
-
-// fetchWeather 通过 wttr.in 获取真实天气数据
-func fetchWeather(city string) string {
-	apiURL := fmt.Sprintf("https://wttr.in/%s?format=j1&lang=zh", url.QueryEscape(city))
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Get(apiURL)
-	if err != nil {
-		log.Printf("[weather] fetch error: %v", err)
-		return fmt.Sprintf("%s: 天气数据获取失败 (%v)", city, err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Sprintf("%s: 读取响应失败", city)
-	}
-
-	var data map[string]any
-	if err := json.Unmarshal(body, &data); err != nil {
-		// wttr.in 可能返回纯文本错误
-		return fmt.Sprintf("%s: %s", city, string(body))
-	}
-
-	// 解析 current_condition
-	conditions, ok := data["current_condition"].([]any)
-	if !ok || len(conditions) == 0 {
-		return fmt.Sprintf("%s: 未找到天气数据", city)
-	}
-	cur, ok := conditions[0].(map[string]any)
-	if !ok {
-		return fmt.Sprintf("%s: 天气数据格式异常", city)
-	}
-
-	tempC, _ := cur["temp_C"].(string)
-	humidity, _ := cur["humidity"].(string)
-	windSpeed, _ := cur["windspeedKmph"].(string)
-	pressure, _ := cur["pressure"].(string)
-	visibility, _ := cur["visibility"].(string)
-
-	// 中文天气描述
-	desc := ""
-	if descArr, ok := cur["lang_zh"].([]any); ok && len(descArr) > 0 {
-		if d, ok := descArr[0].(map[string]any); ok {
-			desc, _ = d["value"].(string)
-		}
-	}
-	if desc == "" {
-		if descArr, ok := cur["weatherDesc"].([]any); ok && len(descArr) > 0 {
-			if d, ok := descArr[0].(map[string]any); ok {
-				desc, _ = d["value"].(string)
-			}
-		}
-	}
-
-	return fmt.Sprintf(
-		"%s 天气: %s, 温度: %s°C, 湿度: %s%%, 风速: %skm/h, 气压: %shPa, 能见度: %skm",
-		city, desc, tempC, humidity, windSpeed, pressure, visibility,
-	)
 }
 
 func writeError(w http.ResponseWriter, id any, code int, msg string) {

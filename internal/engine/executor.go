@@ -11,6 +11,9 @@ import (
 	"net/smtp"
 	"strings"
 	"text/template"
+	"time"
+
+	"log"
 
 	"github.com/2comjie/mcpflow/internal/llm"
 	"github.com/2comjie/mcpflow/internal/mcp"
@@ -281,6 +284,11 @@ type agentExecutor struct {
 	mcpClient *mcp.Client
 }
 
+// NewAgentExecutor 创建 Agent 执行器（供外部直接调用，如 Agent Playground）
+func NewAgentExecutor(mcpClient *mcp.Client) NodeExecutor {
+	return &agentExecutor{mcpClient: mcpClient}
+}
+
 func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map[string]any) (map[string]any, error) {
 	cfg := node.Config.Agent
 	if cfg == nil {
@@ -295,19 +303,29 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 		maxIter = 10
 	}
 
+	// 步骤收集（用于可视化）
+	var steps []map[string]any
+	stepNum := 0
+
 	// 1. 从所有 MCP Server 获取 tools 并转换为 OpenAI Tool 格式
 	type serverTool struct {
 		serverIdx int
 		origName  string
 	}
-	toolMap := make(map[string]serverTool)  // prefixed name -> server info
+	toolMap := make(map[string]serverTool) // prefixed name -> server info
 	var tools []llm.Tool
 
 	for i, srv := range cfg.McpServers {
+		log.Printf("[Agent] Discovering tools from MCP server: %s", srv.URL)
+		t0 := time.Now()
 		mcpTools, err := e.mcpClient.ListTools(ctx, srv.URL, srv.Headers)
+		elapsed := time.Since(t0).Milliseconds()
 		if err != nil {
 			return nil, fmt.Errorf("list tools from %s: %w", srv.URL, err)
 		}
+		log.Printf("[Agent] Discovered %d tools from %s (%dms)", len(mcpTools), srv.URL, elapsed)
+
+		var toolNames []string
 		for _, t := range mcpTools {
 			tm, ok := t.(map[string]any)
 			if !ok {
@@ -319,6 +337,7 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 
 			prefixed := fmt.Sprintf("s%d_%s", i, name)
 			toolMap[prefixed] = serverTool{serverIdx: i, origName: name}
+			toolNames = append(toolNames, name)
 
 			tools = append(tools, llm.Tool{
 				Type: "function",
@@ -329,6 +348,15 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 				},
 			})
 		}
+
+		stepNum++
+		steps = append(steps, map[string]any{
+			"step":       stepNum,
+			"type":       "tool_discovery",
+			"server_url": srv.URL,
+			"tools":      toolNames,
+			"duration":   elapsed,
+		})
 	}
 
 	// 2. 构建初始 messages
@@ -342,10 +370,12 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 	// 3. 循环调用 LLM，处理 tool_calls
 	totalToolCalls := 0
 	iterations := 0
+	var totalTokens int
 
 	for iterations < maxIter {
 		iterations++
 
+		t0 := time.Now()
 		resp, err := client.Chat(ctx, &llm.ChatRequest{
 			Model:       cfg.Model,
 			Messages:    messages,
@@ -353,6 +383,7 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 			Temperature: cfg.Temperature,
 			MaxTokens:   cfg.MaxTokens,
 		})
+		llmElapsed := time.Since(t0).Milliseconds()
 		if err != nil {
 			return nil, fmt.Errorf("agent llm chat (iter %d): %w", iterations, err)
 		}
@@ -362,18 +393,43 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 		}
 
 		choice := resp.Choices[0]
+		totalTokens += resp.Usage.TotalTokens
+		log.Printf("[Agent] LLM iter=%d, tool_calls=%d, finish_reason=%s, content_len=%d",
+			iterations, len(choice.Message.ToolCalls), choice.FinishReason, len(choice.Message.Content))
+
+		// 记录 LLM 调用步骤
+		stepNum++
+		steps = append(steps, map[string]any{
+			"step":             stepNum,
+			"type":             "llm_call",
+			"messages_count":   len(messages),
+			"tools_count":      len(tools),
+			"has_tool_calls":   len(choice.Message.ToolCalls) > 0,
+			"tool_calls_count": len(choice.Message.ToolCalls),
+			"content_preview":  truncateStr(choice.Message.Content, 200),
+			"duration":         llmElapsed,
+		})
 
 		// 没有 tool_calls，返回最终结果
 		if len(choice.Message.ToolCalls) == 0 {
+			stepNum++
+			steps = append(steps, map[string]any{
+				"step":            stepNum,
+				"type":            "final_response",
+				"content_preview": truncateStr(choice.Message.Content, 500),
+				"duration":        0,
+			})
 			return map[string]any{
 				"content":          choice.Message.Content,
 				"tool_calls_count": totalToolCalls,
 				"iterations":       iterations,
-				"total_tokens":     resp.Usage.TotalTokens,
+				"total_tokens":     totalTokens,
+				"agent_steps":      steps,
 			}, nil
 		}
 
 		// 有 tool_calls，追加 assistant 消息
+		log.Printf("[Agent] Processing %d tool calls", len(choice.Message.ToolCalls))
 		messages = append(messages, choice.Message)
 
 		// 执行每个 tool call
@@ -402,23 +458,37 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 
 			// 通过 MCP 调用工具
 			srv := cfg.McpServers[st.serverIdx]
+			t0 := time.Now()
 			result, err := e.mcpClient.CallTool(ctx, srv.URL, st.origName, args, srv.Headers)
+			toolElapsed := time.Since(t0).Milliseconds()
+
+			stepNum++
+			toolStep := map[string]any{
+				"step":      stepNum,
+				"type":      "tool_call",
+				"tool_name": st.origName,
+				"tool_args": args,
+				"duration":  toolElapsed,
+			}
+
 			if err != nil {
+				toolStep["tool_error"] = err.Error()
 				messages = append(messages, llm.Message{
 					Role:       "tool",
 					ToolCallID: tc.ID,
 					Content:    fmt.Sprintf("error: %v", err),
 				})
-				continue
+			} else {
+				// 从 MCP 结果中提取纯文本（MCP 格式: {"content":[{"type":"text","text":"..."}]}）
+				toolText := extractMCPText(result)
+				toolStep["tool_result"] = truncateStr(toolText, 500)
+				messages = append(messages, llm.Message{
+					Role:       "tool",
+					ToolCallID: tc.ID,
+					Content:    toolText,
+				})
 			}
-
-			// 将 MCP 结果序列化为文本返回给 LLM
-			resultJSON, _ := json.Marshal(result)
-			messages = append(messages, llm.Message{
-				Role:       "tool",
-				ToolCallID: tc.ID,
-				Content:    string(resultJSON),
-			})
+			steps = append(steps, toolStep)
 		}
 	}
 
@@ -427,7 +497,43 @@ func (e *agentExecutor) Execute(ctx context.Context, node *model.Node, input map
 		"content":          "Agent reached max iterations without final response",
 		"tool_calls_count": totalToolCalls,
 		"iterations":       iterations,
+		"agent_steps":      steps,
 	}, nil
+}
+
+// extractMCPText 从 MCP 工具调用结果中提取纯文本内容
+// MCP 格式: {"content": [{"type":"text","text":"实际内容"}, ...]}
+// 返回拼接后的纯文本，供 LLM 理解
+func extractMCPText(result map[string]any) string {
+	contentArr, ok := result["content"].([]any)
+	if !ok {
+		// 不是标准 MCP 格式，回退为 JSON
+		b, _ := json.Marshal(result)
+		return string(b)
+	}
+	var parts []string
+	for _, item := range contentArr {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if text, ok := m["text"].(string); ok {
+			parts = append(parts, text)
+		}
+	}
+	if len(parts) == 0 {
+		b, _ := json.Marshal(result)
+		return string(b)
+	}
+	return strings.Join(parts, "\n")
+}
+
+// truncateStr 截断字符串，避免步骤数据过大
+func truncateStr(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
 }
 
 // ==================== HTTP Executor ====================

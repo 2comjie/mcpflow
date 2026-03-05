@@ -9,6 +9,7 @@ import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
   ThunderboltOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons'
 
 const { Content, Sider } = Layout
@@ -19,6 +20,7 @@ const menuItems = [
   { key: '/executions', icon: <ThunderboltOutlined />, label: 'Executions' },
   { key: '/mcp-servers', icon: <CloudServerOutlined />, label: 'MCP Servers' },
   { key: '/llm-providers', icon: <RobotOutlined />, label: 'LLM Providers' },
+  { key: '/agent', icon: <ExperimentOutlined />, label: 'Agent Playground' },
 ]
 
 export default function MainLayout() {
@@ -27,6 +29,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
 
   const getSelectedKey = () => {
+    if (location.pathname.startsWith('/agent')) return '/agent'
     if (location.pathname.startsWith('/llm-providers')) return '/llm-providers'
     if (location.pathname.startsWith('/mcp-servers')) return '/mcp-servers'
     if (location.pathname === '/executions') return '/executions'

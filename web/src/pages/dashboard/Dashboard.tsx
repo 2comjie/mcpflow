@@ -4,10 +4,15 @@ import {
   ApartmentOutlined,
   CloudServerOutlined,
   ArrowRightOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ThunderboltOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { workflowApi, type Workflow } from '../../api/workflow'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
+import { executionApi } from '../../api/execution'
 
 const getGreeting = () => {
   const hour = new Date().getHours()
@@ -37,10 +42,12 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [servers, setServers] = useState<MCPServer[]>([])
+  const [stats, setStats] = useState<any>({})
 
   useEffect(() => {
     workflowApi.list().then((res: any) => setWorkflows(res.data || [])).catch(() => {})
     mcpServerApi.list().then((res: any) => setServers(res.data || [])).catch(() => {})
+    executionApi.stats().then((res: any) => setStats(res || {})).catch(() => {})
   }, [])
 
   const activeServers = servers.filter((s) => s.status === 'active').length
@@ -108,6 +115,55 @@ export default function Dashboard() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* ===== Row 1.5: Execution Stats (4 cards, span 3 each) ===== */}
+        <div style={{ gridColumn: 'span 3', ...card({ padding: '16px 20px' }) }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <ThunderboltOutlined style={{ color: '#3b5bdb', fontSize: 14 }} />
+            <span style={{ fontSize: 11, color: '#98a2b3', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Executions
+            </span>
+          </div>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
+            {stats.total_executions || 0}
+          </span>
+        </div>
+
+        <div style={{ gridColumn: 'span 3', ...card({ padding: '16px 20px' }) }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <CheckCircleOutlined style={{ color: '#12b76a', fontSize: 14 }} />
+            <span style={{ fontSize: 11, color: '#98a2b3', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Success
+            </span>
+          </div>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#12b76a', lineHeight: 1 }}>
+            {stats.success_count || 0}
+          </span>
+        </div>
+
+        <div style={{ gridColumn: 'span 3', ...card({ padding: '16px 20px' }) }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <CloseCircleOutlined style={{ color: '#f04438', fontSize: 14 }} />
+            <span style={{ fontSize: 11, color: '#98a2b3', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Failed
+            </span>
+          </div>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#f04438', lineHeight: 1 }}>
+            {stats.failed_count || 0}
+          </span>
+        </div>
+
+        <div style={{ gridColumn: 'span 3', ...card({ padding: '16px 20px' }) }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <ExperimentOutlined style={{ color: '#7c3aed', fontSize: 14 }} />
+            <span style={{ fontSize: 11, color: '#98a2b3', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Success Rate
+            </span>
+          </div>
+          <span style={{ fontSize: 26, fontWeight: 700, color: '#1a1a2e', lineHeight: 1 }}>
+            {stats.total_executions > 0 ? `${(stats.success_rate || 0).toFixed(0)}%` : '-'}
+          </span>
         </div>
 
         {/* ===== Row 2: Quick actions (spans 5) + Recent list (spans 7) ===== */}

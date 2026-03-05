@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Input, message, Tooltip, Divider, Form, Select, Tag, Modal } from 'antd'
+import { Button, Input, message, Tooltip, Divider, Form, Select, Tag } from 'antd'
 import {
   SaveOutlined,
   PlayCircleOutlined,
@@ -32,6 +32,7 @@ import '@xyflow/react/dist/style.css'
 import { workflowApi } from '../../api/workflow'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
 import { llmProviderApi, type LLMProvider } from '../../api/llm_provider'
+import ExecuteWorkflowModal from '../../components/ExecuteWorkflowModal'
 
 const nodeGroups = [
   {
@@ -237,25 +238,6 @@ export default function WorkflowEditor() {
   }
 
   const [executeModalOpen, setExecuteModalOpen] = useState(false)
-  const [executeInput, setExecuteInput] = useState('{}')
-
-  const handleExecute = async () => {
-    if (isNew) return
-    let input: Record<string, any> = {}
-    try {
-      input = JSON.parse(executeInput)
-    } catch {
-      message.error('Invalid JSON input')
-      return
-    }
-    try {
-      const res: any = await workflowApi.execute(Number(id), input)
-      message.success(`Execution started: #${res.execution_id}`)
-      setExecuteModalOpen(false)
-    } catch (err: any) {
-      message.error(err.message)
-    }
-  }
 
   const selectedNodeType = selectedNode
     ? allNodeTypes.find((t) => t.type === (selectedNode.data as any).nodeType)
@@ -289,6 +271,9 @@ export default function WorkflowEditor() {
       if (!config[configKey]) config[configKey] = {}
       config[configKey].base_url = provider.base_url
       config[configKey].api_key = provider.api_key
+      if (provider.models && provider.models.length > 0) {
+        config[configKey].model = provider.models[0]
+      }
 
       setNodes((nds) =>
         nds.map((n) => (n.id === selectedNode.id ? { ...n, data: { ...n.data, config } } : n)),
@@ -418,7 +403,7 @@ export default function WorkflowEditor() {
         <Form.Item label="Provider (Quick Fill)">
           <Select
             value={undefined}
-            onChange={handleLLMProviderChange}
+            onChange={(v) => handleLLMProviderChange(v)}
             placeholder="Select to auto-fill base_url & api_key"
             style={{ borderRadius: 8 }}
             allowClear
@@ -811,24 +796,12 @@ export default function WorkflowEditor() {
         )}
       </div>
 
-      <Modal
-        title="Execute Workflow"
+      <ExecuteWorkflowModal
         open={executeModalOpen}
-        onCancel={() => setExecuteModalOpen(false)}
-        onOk={handleExecute}
-        okText="Execute"
-      >
-        <div style={{ marginBottom: 8, color: '#667085', fontSize: 13 }}>
-          Input parameters (JSON):
-        </div>
-        <Input.TextArea
-          value={executeInput}
-          onChange={(e) => setExecuteInput(e.target.value)}
-          rows={6}
-          placeholder='{"city": "Beijing"}'
-          style={{ fontFamily: 'monospace', fontSize: 12, borderRadius: 8 }}
-        />
-      </Modal>
+        workflowId={isNew ? null : Number(id)}
+        nodes={nodes}
+        onClose={() => setExecuteModalOpen(false)}
+      />
     </div>
   )
 }

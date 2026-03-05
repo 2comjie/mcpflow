@@ -29,8 +29,11 @@ import {
   MessageOutlined,
   DatabaseOutlined,
   ReloadOutlined,
+  ShopOutlined,
+  CheckOutlined,
 } from '@ant-design/icons'
 import { mcpServerApi, type MCPServer } from '../../api/mcpserver'
+import { marketplaceCatalog, categoryLabels, type MarketplaceMCPServer } from '../../data/mcpMarketplace'
 
 const formatDateTime = (v: string) => {
   if (!v) return '-'
@@ -47,6 +50,19 @@ export default function MCPServerList() {
   const [editId, setEditId] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [form] = Form.useForm()
+
+  // marketplace
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false)
+  const [marketCategory, setMarketCategory] = useState('all')
+  const [marketSearch, setMarketSearch] = useState('')
+  const [addingUrl, setAddingUrl] = useState<string | null>(null)
+
+  // tool test
+  const [testTool, setTestTool] = useState<any>(null)
+  const [testArgs, setTestArgs] = useState<string>('{}')
+  const [testResult, setTestResult] = useState<any>(null)
+  const [testLoading, setTestLoading] = useState(false)
+  const [testDuration, setTestDuration] = useState<number | null>(null)
 
   // detail drawer
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -156,6 +172,71 @@ export default function MCPServerList() {
     if (detailServer) openDetail(detailServer)
   }
 
+  const handleAddFromMarketplace = async (item: MarketplaceMCPServer) => {
+    setAddingUrl(item.url)
+    try {
+      await mcpServerApi.create({
+        name: item.name,
+        description: item.description,
+        url: item.url,
+      })
+      message.success(`${item.name} added`)
+      fetchList()
+    } catch (err: any) {
+      message.error(err.message)
+    } finally {
+      setAddingUrl(null)
+    }
+  }
+
+  const handleTestTool = async () => {
+    if (!detailServer || !testTool) return
+    setTestLoading(true)
+    setTestResult(null)
+    setTestDuration(null)
+    try {
+      const args = JSON.parse(testArgs)
+      const res: any = await mcpServerApi.callTool(detailServer.id, testTool.name, args)
+      setTestResult(res.result)
+      setTestDuration(res.duration)
+    } catch (err: any) {
+      setTestResult({ error: err.message })
+    } finally {
+      setTestLoading(false)
+    }
+  }
+
+  const openToolTest = (tool: any) => {
+    setTestTool(tool)
+    setTestResult(null)
+    setTestDuration(null)
+    // 生成默认参数模板
+    const props = tool.inputSchema?.properties || {}
+    const defaultArgs: Record<string, any> = {}
+    for (const key of Object.keys(props)) {
+      const prop = props[key]
+      if (prop.type === 'number' || prop.type === 'integer') defaultArgs[key] = 0
+      else if (prop.type === 'boolean') defaultArgs[key] = false
+      else defaultArgs[key] = ''
+    }
+    setTestArgs(JSON.stringify(defaultArgs, null, 2))
+  }
+
+  const existingUrls = new Set(servers.map((s) => s.url))
+
+  const filteredMarketplace = marketplaceCatalog.filter((item) => {
+    if (marketCategory !== 'all' && item.category !== marketCategory) return false
+    if (marketSearch) {
+      const q = marketSearch.toLowerCase()
+      return (
+        item.name.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.tags.some((t) => t.includes(q))
+      )
+    }
+    return true
+  })
+
   const filtered = servers.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -173,7 +254,18 @@ export default function MCPServerList() {
         marginBottom: 8,
       }}
     >
-      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{tool.name}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <div style={{ fontWeight: 600, fontSize: 13 }}>{tool.name}</div>
+        <Button
+          type="link"
+          size="small"
+          icon={<ToolOutlined />}
+          onClick={() => openToolTest(tool)}
+          style={{ fontSize: 12, padding: 0, height: 'auto' }}
+        >
+          Test
+        </Button>
+      </div>
       {tool.description && (
         <div style={{ fontSize: 12, color: '#667085', marginBottom: 8 }}>{tool.description}</div>
       )}
@@ -254,6 +346,13 @@ export default function MCPServerList() {
           </div>
         </div>
         <Space>
+          <Button
+            icon={<ShopOutlined />}
+            onClick={() => setMarketplaceOpen(true)}
+            style={{ borderRadius: 10 }}
+          >
+            Marketplace
+          </Button>
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -586,6 +685,165 @@ export default function MCPServerList() {
             </Form.List>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Tool Test Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ToolOutlined style={{ color: '#3b5bdb' }} />
+            Test Tool: {testTool?.name}
+          </div>
+        }
+        open={!!testTool}
+        onCancel={() => setTestTool(null)}
+        footer={null}
+        width={600}
+        styles={{ body: { paddingTop: 12 } }}
+      >
+        {testTool && (
+          <div>
+            {testTool.description && (
+              <div style={{ fontSize: 12, color: '#667085', marginBottom: 12 }}>
+                {testTool.description}
+              </div>
+            )}
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ fontSize: 12, color: '#344054', fontWeight: 500, marginBottom: 4 }}>
+                Arguments (JSON)
+              </div>
+              <Input.TextArea
+                rows={6}
+                value={testArgs}
+                onChange={(e) => setTestArgs(e.target.value)}
+                style={{ fontFamily: 'monospace', fontSize: 12, borderRadius: 8 }}
+              />
+            </div>
+            <Button
+              type="primary"
+              onClick={handleTestTool}
+              loading={testLoading}
+              style={{ borderRadius: 8, marginBottom: 16 }}
+            >
+              Run
+            </Button>
+            {testResult && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, color: '#344054', fontWeight: 500 }}>Result</span>
+                  {testDuration !== null && (
+                    <Tag style={{ fontSize: 10, borderRadius: 4 }}>{testDuration}ms</Tag>
+                  )}
+                </div>
+                <pre
+                  style={{
+                    background: '#f9fafb',
+                    border: '1px solid #eaecf0',
+                    borderRadius: 8,
+                    padding: 12,
+                    maxHeight: 300,
+                    overflow: 'auto',
+                    fontSize: 11,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                  }}
+                >
+                  {JSON.stringify(testResult, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Marketplace Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShopOutlined style={{ color: '#3b5bdb' }} />
+            MCP Server Marketplace
+          </div>
+        }
+        open={marketplaceOpen}
+        onCancel={() => {
+          setMarketplaceOpen(false)
+          setMarketSearch('')
+          setMarketCategory('all')
+        }}
+        footer={null}
+        width={800}
+        styles={{ body: { paddingTop: 12 } }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#98a2b3' }} />}
+            placeholder="Search servers..."
+            value={marketSearch}
+            onChange={(e) => setMarketSearch(e.target.value)}
+            allowClear
+            style={{ borderRadius: 8, marginBottom: 12 }}
+          />
+          <Space size={4}>
+            {Object.entries(categoryLabels).map(([key, label]) => (
+              <Tag
+                key={key}
+                color={marketCategory === key ? 'blue' : undefined}
+                style={{ cursor: 'pointer', borderRadius: 6, padding: '2px 10px' }}
+                onClick={() => setMarketCategory(key)}
+              >
+                {label}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+
+        <Row gutter={[12, 12]}>
+          {filteredMarketplace.map((item) => {
+            const added = existingUrls.has(item.url)
+            return (
+              <Col key={item.url} xs={24} sm={12}>
+                <div
+                  style={{
+                    padding: '16px',
+                    background: '#f9fafb',
+                    borderRadius: 10,
+                    border: '1px solid #eaecf0',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                    <Button
+                      type={added ? 'default' : 'primary'}
+                      size="small"
+                      icon={added ? <CheckOutlined /> : <PlusOutlined />}
+                      disabled={added}
+                      loading={addingUrl === item.url}
+                      onClick={() => handleAddFromMarketplace(item)}
+                      style={{ borderRadius: 6 }}
+                    >
+                      {added ? 'Added' : 'Add'}
+                    </Button>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#667085', marginBottom: 8, lineHeight: 1.5 }}>
+                    {item.description}
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {item.tags.map((tag) => (
+                      <Tag key={tag} style={{ fontSize: 11, borderRadius: 4, margin: 0 }}>
+                        {tag}
+                      </Tag>
+                    ))}
+                  </div>
+                </div>
+              </Col>
+            )
+          })}
+          {filteredMarketplace.length === 0 && (
+            <Col span={24}>
+              <Empty description="No matching servers" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </Col>
+          )}
+        </Row>
       </Modal>
     </div>
   )

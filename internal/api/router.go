@@ -18,6 +18,9 @@ func New(store *store.Store, engine *engine.Engine, mcp *mcp.Client) *API {
 }
 
 func (a *API) RegisterRoutes(r *gin.RouterGroup) {
+	// Stats
+	r.GET("/stats", a.GetStats)
+
 	// Workflow
 	wf := r.Group("/workflows")
 	{
@@ -27,6 +30,7 @@ func (a *API) RegisterRoutes(r *gin.RouterGroup) {
 		wf.PUT("/:id", a.UpdateWorkflow)
 		wf.DELETE("/:id", a.DeleteWorkflow)
 		wf.POST("/:id/execute", a.ExecuteWorkflow)
+		wf.POST("/:id/execute/stream", a.ExecuteWorkflowSSE)
 		wf.GET("/:id/executions", a.ListWorkflowExecutions)
 	}
 
@@ -50,6 +54,13 @@ func (a *API) RegisterRoutes(r *gin.RouterGroup) {
 		ms.GET("/:id/tools", a.GetMCPServerTools)
 		ms.GET("/:id/prompts", a.GetMCPServerPrompts)
 		ms.GET("/:id/resources", a.GetMCPServerResources)
+		ms.POST("/:id/tools/call", a.CallMCPTool)
+	}
+
+	// Agent Playground
+	agent := r.Group("/agent")
+	{
+		agent.POST("/chat", a.AgentChat)
 	}
 
 	// LLM Provider

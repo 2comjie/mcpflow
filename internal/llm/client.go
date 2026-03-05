@@ -26,9 +26,11 @@ func NewClient(baseURL, apiKey string) *Client {
 }
 
 // Message 支持普通文本和 tool_calls
+// 注意：Content 不使用 omitempty，因为部分 LLM（如 DeepSeek）要求 assistant 消息
+// 即使在返回 tool_calls 时也必须包含 content 字段（可以为空字符串）。
 type Message struct {
 	Role       string     `json:"role"`
-	Content    string     `json:"content,omitempty"`
+	Content    string     `json:"content"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
 }

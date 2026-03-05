@@ -11,6 +11,20 @@ import (
 // LogFunc 执行日志回调
 type LogFunc func(log *model.ExecutionLog)
 
+// NodeEvent 节点执行事件（用于 SSE 流式推送）
+type NodeEvent struct {
+	NodeID   string         `json:"node_id"`
+	NodeName string         `json:"node_name"`
+	NodeType string         `json:"node_type"`
+	Status   string         `json:"status"` // running, completed, failed
+	Output   map[string]any `json:"output,omitempty"`
+	Error    string         `json:"error,omitempty"`
+	Duration int64          `json:"duration,omitempty"`
+}
+
+// EventFunc 节点事件回调
+type EventFunc func(event *NodeEvent)
+
 // Engine 工作流执行引擎
 type Engine struct {
 	registry *ExecutorRegistry
@@ -28,6 +42,11 @@ type RunResult struct {
 
 // Run 执行工作流
 func (e *Engine) Run(ctx context.Context, wf *model.Workflow, input map[string]any, logFn LogFunc) (*RunResult, error) {
+	return e.RunWithEvents(ctx, wf, input, logFn, nil)
+}
+
+// RunWithEvents 执行工作流，支持节点事件回调
+func (e *Engine) RunWithEvents(ctx context.Context, wf *model.Workflow, input map[string]any, logFn LogFunc, eventFn EventFunc) (*RunResult, error) {
 	graph, err := buildGraph(wf.Nodes, wf.Edges)
 	if err != nil {
 		return nil, fmt.Errorf("build graph: %w", err)
@@ -51,7 +70,7 @@ func (e *Engine) Run(ctx context.Context, wf *model.Workflow, input map[string]a
 	}
 
 	// 从 start 节点递归执行
-	if err := e.executeNode(ctx, graph, startNode, input, outputs, nodeStates, templateData, logFn, 1); err != nil {
+	if err := e.executeNode(ctx, graph, startNode, input, outputs, nodeStates, templateData, logFn, eventFn, 1); err != nil {
 		return nil, err
 	}
 
@@ -84,12 +103,16 @@ func (e *Engine) executeNode(
 	nodeStates model.NodeStates,
 	templateData map[string]any,
 	logFn LogFunc,
+	eventFn EventFunc,
 	attempt int,
 ) error {
 	// 已执行过则跳过
 	if _, done := outputs[node.ID]; done {
 		return nil
 	}
+
+	// 发送 running 事件
+	e.emitEvent(eventFn, node, "running", nil, "", 0)
 
 	// 设置超时
 	nodeCtx := ctx
@@ -108,6 +131,7 @@ func (e *Engine) executeNode(
 	executor, err := e.registry.Get(node.Type)
 	if err != nil {
 		e.recordState(nodeStates, node, "failed", input, nil, err.Error(), 0)
+		e.emitEvent(eventFn, node, "failed", nil, err.Error(), 0)
 		return err
 	}
 
@@ -120,10 +144,11 @@ func (e *Engine) executeNode(
 		// 重试逻辑
 		if node.Retry != nil && attempt <= node.Retry.Max {
 			time.Sleep(time.Duration(node.Retry.Interval) * time.Second)
-			return e.executeNode(ctx, graph, node, input, outputs, nodeStates, templateData, logFn, attempt+1)
+			return e.executeNode(ctx, graph, node, input, outputs, nodeStates, templateData, logFn, eventFn, attempt+1)
 		}
 		e.recordState(nodeStates, node, "failed", input, nil, err.Error(), duration)
 		e.writeLog(logFn, node, attempt, "failed", input, nil, err.Error(), duration)
+		e.emitEvent(eventFn, node, "failed", nil, err.Error(), duration)
 		return fmt.Errorf("node %s (%s) failed: %w", node.ID, node.Name, err)
 	}
 
@@ -132,6 +157,7 @@ func (e *Engine) executeNode(
 	templateData[node.ID] = output
 	e.recordState(nodeStates, node, "completed", input, output, "", duration)
 	e.writeLog(logFn, node, attempt, "completed", input, output, "", duration)
+	e.emitEvent(eventFn, node, "completed", output, "", duration)
 
 	// 条件节点：根据 branch 选择下游
 	branch := ""
@@ -144,12 +170,27 @@ func (e *Engine) executeNode(
 	// 递归执行下游节点
 	nextNodes := graph.getNextNodes(node.ID, branch)
 	for _, next := range nextNodes {
-		if err := e.executeNode(ctx, graph, next, output, outputs, nodeStates, templateData, logFn, 1); err != nil {
+		if err := e.executeNode(ctx, graph, next, output, outputs, nodeStates, templateData, logFn, eventFn, 1); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (e *Engine) emitEvent(eventFn EventFunc, node *model.Node, status string, output map[string]any, errMsg string, duration int64) {
+	if eventFn == nil {
+		return
+	}
+	eventFn(&NodeEvent{
+		NodeID:   node.ID,
+		NodeName: node.Name,
+		NodeType: string(node.Type),
+		Status:   status,
+		Output:   output,
+		Error:    errMsg,
+		Duration: duration,
+	})
 }
 
 func (e *Engine) recordState(states model.NodeStates, node *model.Node, status string, input, output map[string]any, errMsg string, duration int64) {

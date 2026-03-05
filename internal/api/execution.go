@@ -47,6 +47,15 @@ func (a *API) GetExecutionLogs(c *gin.Context) {
 	c.JSON(http.StatusOK, logs)
 }
 
+func (a *API) GetStats(c *gin.Context) {
+	stats, err := a.store.GetExecutionStats()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, stats)
+}
+
 func (a *API) DeleteExecution(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

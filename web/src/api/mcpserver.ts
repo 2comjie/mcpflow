@@ -24,4 +24,6 @@ export const mcpServerApi = {
   tools: (id: number) => request.get(`/mcp-servers/${id}/tools`),
   prompts: (id: number) => request.get(`/mcp-servers/${id}/prompts`),
   resources: (id: number) => request.get(`/mcp-servers/${id}/resources`),
+  callTool: (id: number, toolName: string, args: Record<string, any>) =>
+    request.post(`/mcp-servers/${id}/tools/call`, { tool_name: toolName, arguments: args }),
 }

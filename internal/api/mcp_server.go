@@ -108,6 +108,44 @@ func (a *API) TestMCPServer(c *gin.Context) {
 	})
 }
 
+func (a *API) CallMCPTool(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	srv, err := a.store.GetMCPServer(uint(id))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
+		return
+	}
+
+	var req struct {
+		ToolName  string         `json:"tool_name" binding:"required"`
+		Arguments map[string]any `json:"arguments"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Arguments == nil {
+		req.Arguments = map[string]any{}
+	}
+
+	headers := srv.GetHeadersMap()
+	start := time.Now()
+	result, err := a.mcp.CallTool(c.Request.Context(), srv.URL, req.ToolName, req.Arguments, headers)
+	duration := time.Since(start).Milliseconds()
+	if err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "duration": duration})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result, "duration": duration})
+}
+
 func (a *API) GetMCPServerTools(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

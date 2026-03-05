@@ -8,6 +8,7 @@ import MCPServerList from './pages/mcpserver/MCPServerList'
 import LLMProviderList from './pages/llmprovider/LLMProviderList'
 import ExecutionList from './pages/execution/ExecutionList'
 import AllExecutions from './pages/execution/AllExecutions'
+import AgentPlayground from './pages/agent/AgentPlayground'
 
 const theme = {
   token: {
@@ -52,6 +53,7 @@ export default function App() {
             <Route path="/executions" element={<AllExecutions />} />
             <Route path="/mcp-servers" element={<MCPServerList />} />
             <Route path="/llm-providers" element={<LLMProviderList />} />
+            <Route path="/agent" element={<AgentPlayground />} />
           </Route>
           <Route path="/workflows/:id" element={<WorkflowEditor />} />
         </Routes>

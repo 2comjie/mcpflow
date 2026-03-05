@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Button, Row, Col, Dropdown, message, Input } from 'antd'
+import { Button, Row, Col, Dropdown, message, Input, Modal, Tag, Space, Empty } from 'antd'
 import {
   PlusOutlined,
   SearchOutlined,
@@ -11,14 +11,22 @@ import {
   DeleteOutlined,
   PlayCircleOutlined,
   UnorderedListOutlined,
+  AppstoreOutlined,
+  RocketOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { workflowApi, type Workflow } from '../../api/workflow'
+import { workflowTemplates, templateCategoryLabels, type WorkflowTemplate } from '../../data/workflowTemplates'
+import ExecuteWorkflowModal from '../../components/ExecuteWorkflowModal'
 
 export default function WorkflowList() {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [templateCategory, setTemplateCategory] = useState('all')
+  const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null)
+  const [executeWorkflowId, setExecuteWorkflowId] = useState<number | null>(null)
   const navigate = useNavigate()
 
   const fetchList = async () => {
@@ -47,14 +55,32 @@ export default function WorkflowList() {
     }
   }
 
-  const handleExecute = async (id: number) => {
+  const handleExecute = (id: number) => {
+    setExecuteWorkflowId(id)
+  }
+
+  const handleUseTemplate = async (template: WorkflowTemplate) => {
+    setCreatingTemplate(template.id)
     try {
-      const res: any = await workflowApi.execute(id)
-      message.success(`Execution started: #${res.execution_id}`)
+      const res: any = await workflowApi.create({
+        name: template.name,
+        description: template.description,
+        nodes: template.nodes,
+        edges: template.edges,
+      })
+      message.success('Workflow created from template')
+      setTemplateModalOpen(false)
+      navigate(`/workflows/${res.id}`)
     } catch (err: any) {
       message.error(err.message)
+    } finally {
+      setCreatingTemplate(null)
     }
   }
+
+  const filteredTemplates = workflowTemplates.filter(
+    (t) => templateCategory === 'all' || t.category === templateCategory,
+  )
 
   const filtered = workflows.filter(
     (w) =>
@@ -82,14 +108,23 @@ export default function WorkflowList() {
             Create and manage your automation workflows
           </div>
         </div>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/workflows/new')}
-          style={{ borderRadius: 10 }}
-        >
-          New Workflow
-        </Button>
+        <Space>
+          <Button
+            icon={<AppstoreOutlined />}
+            onClick={() => setTemplateModalOpen(true)}
+            style={{ borderRadius: 10 }}
+          >
+            Templates
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/workflows/new')}
+            style={{ borderRadius: 10 }}
+          >
+            New Workflow
+          </Button>
+        </Space>
       </div>
 
       {workflows.length > 0 && (
@@ -231,6 +266,86 @@ export default function WorkflowList() {
           ))}
         </Row>
       )}
+
+      {/* Template Modal */}
+      <Modal
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AppstoreOutlined style={{ color: '#3b5bdb' }} />
+            Workflow Templates
+          </div>
+        }
+        open={templateModalOpen}
+        onCancel={() => {
+          setTemplateModalOpen(false)
+          setTemplateCategory('all')
+        }}
+        footer={null}
+        width={720}
+        styles={{ body: { paddingTop: 12 } }}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Space size={4}>
+            {Object.entries(templateCategoryLabels).map(([key, label]) => (
+              <Tag
+                key={key}
+                color={templateCategory === key ? 'blue' : undefined}
+                style={{ cursor: 'pointer', borderRadius: 6, padding: '2px 10px' }}
+                onClick={() => setTemplateCategory(key)}
+              >
+                {label}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+
+        <Row gutter={[12, 12]}>
+          {filteredTemplates.map((template) => (
+            <Col key={template.id} xs={24} sm={12}>
+              <div
+                style={{
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: 10,
+                  border: '1px solid #eaecf0',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{template.name}</div>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<RocketOutlined />}
+                    loading={creatingTemplate === template.id}
+                    onClick={() => handleUseTemplate(template)}
+                    style={{ borderRadius: 6 }}
+                  >
+                    Use
+                  </Button>
+                </div>
+                <div style={{ fontSize: 12, color: '#667085', marginBottom: 8, lineHeight: 1.5 }}>
+                  {template.description}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#98a2b3' }}>
+                  <span><NodeIndexOutlined /> {template.nodes.length} nodes</span>
+                  <Tag style={{ fontSize: 11, borderRadius: 4, margin: 0 }}>{template.category}</Tag>
+                </div>
+              </div>
+            </Col>
+          ))}
+          {filteredTemplates.length === 0 && (
+            <Col span={24}>
+              <Empty description="No templates in this category" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </Col>
+          )}
+        </Row>
+      </Modal>
+
+      <ExecuteWorkflowModal
+        open={executeWorkflowId !== null}
+        workflowId={executeWorkflowId}
+        onClose={() => setExecuteWorkflowId(null)}
+      />
     </div>
   )
 }
