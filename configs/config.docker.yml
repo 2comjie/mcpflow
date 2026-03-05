@@ -1,0 +1,6 @@
+server:
+  port: "8080"
+
+database:
+  uri: "mongodb://mongo:27017"
+  name: mcpflow

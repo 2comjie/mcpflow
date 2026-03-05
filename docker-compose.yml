@@ -3,10 +3,29 @@ services:
     image: mongo:7
     container_name: mcpflow-mongo
     restart: unless-stopped
-    ports:
-      - "27017:27017"
     volumes:
       - mongo_data:/data/db
+      - ./deploy/mongo-init.js:/docker-entrypoint-initdb.d/init.js:ro
+
+  app:
+    build: .
+    container_name: mcpflow-app
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      - CONFIG_PATH=configs/config.docker.yml
+    volumes:
+      - ./configs/config.docker.yml:/app/configs/config.docker.yml:ro
+
+  web:
+    build: ./web
+    container_name: mcpflow-web
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
 
 volumes:
   mongo_data:
