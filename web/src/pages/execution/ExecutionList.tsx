@@ -99,7 +99,16 @@ export default function ExecutionList() {
   }
 
   const columns = [
-    { title: 'ID', dataIndex: 'id', width: 80 },
+    {
+      title: 'ID',
+      dataIndex: 'id',
+      width: 100,
+      render: (v: string) => (
+        <Tooltip title={v}>
+          <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{v?.slice(0, 8)}</span>
+        </Tooltip>
+      ),
+    },
     {
       title: 'Status',
       dataIndex: 'status',
@@ -194,7 +203,7 @@ export default function ExecutionList() {
       />
 
       <Drawer
-        title={`Execution #${detail?.id}`}
+        title={`Execution #${detail?.id?.slice(0, 8)}`}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={560}

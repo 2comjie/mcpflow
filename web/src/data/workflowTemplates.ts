@@ -10,26 +10,32 @@ export interface WorkflowTemplate {
 }
 
 export const workflowTemplates: WorkflowTemplate[] = [
+  // ==================== Basic ====================
   {
     id: 'simple-llm',
     name: 'Simple LLM Chat',
-    description: '最基础的 LLM 调用：接收输入 → LLM 处理 → 返回结果',
+    description: 'LLM single-turn conversation: input a question, get an answer',
     category: 'basic',
     nodes: [
-      { id: 'node_1', type: 'start', name: 'Start', config: {}, position: { x: 300, y: 50 } },
       {
-        id: 'node_2',
-        type: 'llm',
-        name: 'LLM Chat',
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'query', type: 'text', required: true, description: 'Your question' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'llm', name: 'LLM Chat',
         config: {
           llm: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '{{.input.query}}',
+            base_url: '', api_key: '', model: '',
+            prompt: '{{input.query}}',
             system_msg: 'You are a helpful assistant.',
-            temperature: 0.7,
-            max_tokens: 1024,
+            temperature: 0.7, max_tokens: 1024,
           },
         },
         position: { x: 300, y: 200 },
@@ -41,28 +47,131 @@ export const workflowTemplates: WorkflowTemplate[] = [
       { id: 'e2-3', source: 'node_2', target: 'node_3' },
     ],
   },
+  {
+    id: 'llm-translate',
+    name: 'Translation Pipeline',
+    description: 'LLM translates text, then Code node extracts a word count',
+    category: 'basic',
+    nodes: [
+      {
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'text', type: 'text', required: true, description: 'Text to translate' },
+              { name: 'target_lang', type: 'string', required: false, description: 'Target language', default: 'English' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'llm', name: 'Translate',
+        config: {
+          llm: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Translate the following text to {{input.target_lang}}:\n\n{{input.text}}',
+            system_msg: 'You are a professional translator. Only output the translated text, nothing else.',
+            temperature: 0.3, max_tokens: 2048,
+          },
+        },
+        position: { x: 300, y: 200 },
+      },
+      {
+        id: 'node_3', type: 'code', name: 'Word Count',
+        config: {
+          code: {
+            language: 'javascript',
+            code: 'var text = input.content || ""; var words = text.trim().split(/\\s+/).length; return { word_count: words, content: input.content };',
+          },
+        },
+        position: { x: 300, y: 350 },
+      },
+      { id: 'node_4', type: 'end', name: 'End', config: {}, position: { x: 300, y: 500 } },
+    ],
+    edges: [
+      { id: 'e1-2', source: 'node_1', target: 'node_2' },
+      { id: 'e2-3', source: 'node_2', target: 'node_3' },
+      { id: 'e3-4', source: 'node_3', target: 'node_4' },
+    ],
+  },
+  {
+    id: 'http-llm-summary',
+    name: 'HTTP Fetch + LLM Summary',
+    description: 'Fetch data from an HTTP API, then use LLM to summarize the result',
+    category: 'basic',
+    nodes: [
+      {
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'url', type: 'string', required: true, description: 'HTTP URL to fetch', default: 'https://httpbin.org/get' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'http', name: 'HTTP Request',
+        config: {
+          http: {
+            method: 'GET',
+            url: '{{input.url}}',
+            headers: {},
+            body: '',
+          },
+        },
+        position: { x: 300, y: 200 },
+      },
+      {
+        id: 'node_3', type: 'llm', name: 'Summarize',
+        config: {
+          llm: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Summarize the following API response data in a concise paragraph:\n\n{{nodes.node_2}}',
+            system_msg: 'You are a data analyst. Summarize the key information.',
+            temperature: 0.5, max_tokens: 512,
+          },
+        },
+        position: { x: 300, y: 350 },
+      },
+      { id: 'node_4', type: 'end', name: 'End', config: {}, position: { x: 300, y: 500 } },
+    ],
+    edges: [
+      { id: 'e1-2', source: 'node_1', target: 'node_2' },
+      { id: 'e2-3', source: 'node_2', target: 'node_3' },
+      { id: 'e3-4', source: 'node_3', target: 'node_4' },
+    ],
+  },
+
+  // ==================== Agent ====================
   {
     id: 'agent-mcp',
     name: 'Agent + MCP Tools',
-    description: 'Agent 自动发现并使用 MCP 工具完成任务',
+    description: 'Agent automatically discovers and uses MCP tools to complete tasks',
     category: 'agent',
     nodes: [
-      { id: 'node_1', type: 'start', name: 'Start', config: {}, position: { x: 300, y: 50 } },
       {
-        id: 'node_2',
-        type: 'agent',
-        name: 'Agent',
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'query', type: 'text', required: true, description: 'Task for the agent' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'agent', name: 'Agent',
         config: {
           agent: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '{{.input.query}}',
-            system_msg: '你是一个智能助手，请使用可用的工具来完成用户的任务。',
+            base_url: '', api_key: '', model: '',
+            prompt: '{{input.query}}',
+            system_msg: 'You are an intelligent assistant. Use available tools to complete the task.',
             mcp_servers: [],
-            max_iterations: 10,
-            temperature: 0.3,
-            max_tokens: 1024,
+            max_iterations: 10, temperature: 0.3, max_tokens: 1024,
           },
         },
         position: { x: 300, y: 200 },
@@ -75,63 +184,121 @@ export const workflowTemplates: WorkflowTemplate[] = [
     ],
   },
   {
+    id: 'multi-agent',
+    name: 'Multi-Agent Collaboration',
+    description: 'Agent 1 researches information, Agent 2 analyzes and summarizes',
+    category: 'agent',
+    nodes: [
+      {
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'topic', type: 'string', required: true, description: 'Research topic' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'agent', name: 'Research Agent',
+        config: {
+          agent: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Research the following topic using available tools: {{input.topic}}',
+            system_msg: 'You are a research assistant. Use tools to gather comprehensive information.',
+            mcp_servers: [],
+            max_iterations: 10, temperature: 0.3, max_tokens: 2048,
+          },
+        },
+        position: { x: 300, y: 200 },
+      },
+      {
+        id: 'node_3', type: 'agent', name: 'Analysis Agent',
+        config: {
+          agent: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Based on the research results below, write a professional analysis report:\n\n{{nodes.node_2.content}}',
+            system_msg: 'You are a professional analyst. Organize raw information into a structured report.',
+            mcp_servers: [],
+            max_iterations: 3, temperature: 0.7, max_tokens: 2048,
+          },
+        },
+        position: { x: 300, y: 380 },
+      },
+      { id: 'node_4', type: 'end', name: 'End', config: {}, position: { x: 300, y: 530 } },
+    ],
+    edges: [
+      { id: 'e1-2', source: 'node_1', target: 'node_2' },
+      { id: 'e2-3', source: 'node_2', target: 'node_3' },
+      { id: 'e3-4', source: 'node_3', target: 'node_4' },
+    ],
+  },
+
+  // ==================== Advanced ====================
+  {
     id: 'conditional-branch',
     name: 'Conditional Branching',
-    description: 'LLM 分析 → 代码提取 → 条件判断 → 不同分支处理',
+    description: 'LLM scoring + Code extraction + Condition branching to different paths',
     category: 'advanced',
     nodes: [
-      { id: 'node_1', type: 'start', name: 'Start', config: {}, position: { x: 300, y: 50 } },
       {
-        id: 'node_2',
-        type: 'llm',
-        name: 'Analyze',
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'content', type: 'text', required: true, description: 'Content to analyze' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'llm', name: 'Analyze & Score',
         config: {
           llm: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '分析以下内容并返回 JSON 格式结果，包含 score 字段（0-100）：\n\n{{.input.content}}',
-            system_msg: '你是一个评分助手，请返回 JSON 格式 {"score": 85}',
-            temperature: 0.3,
-            max_tokens: 256,
+            base_url: '', api_key: '', model: '',
+            prompt: 'Analyze the following content, return a JSON with a "score" field (0-100):\n\n{{input.content}}',
+            system_msg: 'You are a scoring assistant. Return JSON format only, e.g. {"score": 85}',
+            temperature: 0.3, max_tokens: 256,
           },
         },
         position: { x: 300, y: 180 },
       },
       {
-        id: 'node_3',
-        type: 'code',
-        name: 'Parse Score',
+        id: 'node_3', type: 'code', name: 'Parse Score',
         config: {
           code: {
             language: 'javascript',
-            code: 'var text = input.content || ""; var m = text.match(/"score"\\s*:\\s*(\\d+)/); var score = m ? parseInt(m[1], 10) : 0; return {score: score};',
+            code: 'var text = input.content || ""; var m = text.match(/"score"\\s*:\\s*(\\d+)/); var score = m ? parseInt(m[1], 10) : 0; return { score: score };',
           },
         },
         position: { x: 300, y: 310 },
       },
       {
-        id: 'node_4',
-        type: 'condition',
-        name: 'Score Check',
+        id: 'node_4', type: 'condition', name: 'Score >= 80?',
         config: { condition: { expression: 'score >= 80' } },
         position: { x: 300, y: 440 },
       },
       {
-        id: 'node_5',
-        type: 'llm',
-        name: 'High Score',
+        id: 'node_5', type: 'llm', name: 'High Score Path',
         config: {
-          llm: { base_url: '', api_key: '', model: '', prompt: '生成一段祝贺消息，得分为 {{.node_3.score}} 分', temperature: 0.7, max_tokens: 512 },
+          llm: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Generate a congratulation message. The score is {{nodes.node_3.score}}.',
+            temperature: 0.7, max_tokens: 512,
+          },
         },
         position: { x: 100, y: 580 },
       },
       {
-        id: 'node_6',
-        type: 'llm',
-        name: 'Low Score',
+        id: 'node_6', type: 'llm', name: 'Low Score Path',
         config: {
-          llm: { base_url: '', api_key: '', model: '', prompt: '生成改进建议，当前得分为 {{.node_3.score}} 分', temperature: 0.7, max_tokens: 512 },
+          llm: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Generate improvement suggestions. Current score is {{nodes.node_3.score}}.',
+            temperature: 0.7, max_tokens: 512,
+          },
         },
         position: { x: 500, y: 580 },
       },
@@ -148,46 +315,49 @@ export const workflowTemplates: WorkflowTemplate[] = [
     ],
   },
   {
-    id: 'multi-agent',
-    name: 'Multi-Agent Collaboration',
-    description: '多智能体协作：Agent1 查询信息 → Agent2 分析总结',
-    category: 'agent',
+    id: 'agent-email-report',
+    name: 'Agent Research + Email Report',
+    description: 'Agent researches a topic, then sends the report via email',
+    category: 'advanced',
     nodes: [
-      { id: 'node_1', type: 'start', name: 'Start', config: {}, position: { x: 300, y: 50 } },
       {
-        id: 'node_2',
-        type: 'agent',
-        name: 'Research Agent',
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'topic', type: 'string', required: true, description: 'Research topic' },
+              { name: 'email_to', type: 'string', required: true, description: 'Recipient email', default: '3217998214@qq.com' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'agent', name: 'Research Agent',
         config: {
           agent: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '请使用可用的工具，查询关于 {{.input.topic}} 的相关信息。',
-            system_msg: '你是一个信息查询助手，擅长使用工具收集信息。',
+            base_url: '', api_key: '', model: '',
+            prompt: 'Research the following topic and write a detailed report: {{input.topic}}',
+            system_msg: 'You are a research assistant. Use available tools to gather information and generate a report.',
             mcp_servers: [],
-            max_iterations: 10,
-            temperature: 0.3,
-            max_tokens: 2048,
+            max_iterations: 10, temperature: 0.5, max_tokens: 2048,
           },
         },
         position: { x: 300, y: 200 },
       },
       {
-        id: 'node_3',
-        type: 'agent',
-        name: 'Analysis Agent',
+        id: 'node_3', type: 'email', name: 'Send Report',
         config: {
-          agent: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '根据以下调研结果，撰写一份专业的分析报告：\n\n{{.node_2.content}}',
-            system_msg: '你是一个专业分析师，擅长将原始信息整理为结构化报告。',
-            mcp_servers: [],
-            max_iterations: 3,
-            temperature: 0.7,
-            max_tokens: 2048,
+          email: {
+            smtp_host: 'smtp.qq.com',
+            smtp_port: 465,
+            username: '3217998214@qq.com',
+            password: 'wbzcxscbfwgbdhac',
+            from: '3217998214@qq.com',
+            to: '{{input.email_to}}',
+            subject: 'Research Report: {{input.topic}}',
+            body: '<h2>Research Report: {{input.topic}}</h2><div>{{nodes.node_2.content}}</div>',
+            content_type: 'text/html',
           },
         },
         position: { x: 300, y: 380 },
@@ -201,56 +371,64 @@ export const workflowTemplates: WorkflowTemplate[] = [
     ],
   },
   {
-    id: 'agent-email-report',
-    name: 'Agent Research + Email',
-    description: 'Agent 调研主题 → 生成报告 → 邮件发送',
+    id: 'llm-code-http',
+    name: 'LLM + Code + HTTP Pipeline',
+    description: 'LLM generates data, Code transforms it, HTTP sends to external API',
     category: 'advanced',
     nodes: [
-      { id: 'node_1', type: 'start', name: 'Start', config: {}, position: { x: 300, y: 50 } },
       {
-        id: 'node_2',
-        type: 'agent',
-        name: 'Research Agent',
+        id: 'node_1', type: 'start', name: 'Start',
         config: {
-          agent: {
-            base_url: '',
-            api_key: '',
-            model: '',
-            prompt: '研究以下主题并写一份详细报告：{{.input.topic}}',
-            system_msg: '你是一个研究助手，请使用可用工具收集信息并生成报告。',
-            mcp_servers: [],
-            max_iterations: 10,
-            temperature: 0.5,
-            max_tokens: 2048,
+          start: {
+            input_defs: [
+              { name: 'prompt', type: 'text', required: true, description: 'What to generate' },
+              { name: 'webhook_url', type: 'string', required: false, description: 'Webhook URL to send result', default: 'https://httpbin.org/post' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'llm', name: 'Generate',
+        config: {
+          llm: {
+            base_url: '', api_key: '', model: '',
+            prompt: '{{input.prompt}}\n\nReturn the result as JSON.',
+            system_msg: 'You are a data generator. Always return valid JSON.',
+            temperature: 0.5, max_tokens: 1024,
           },
         },
         position: { x: 300, y: 200 },
       },
       {
-        id: 'node_3',
-        type: 'email',
-        name: 'Send Report',
+        id: 'node_3', type: 'code', name: 'Transform',
         config: {
-          email: {
-            smtp_host: 'smtp.qq.com',
-            smtp_port: 465,
-            username: '3217998214@qq.com',
-            password: '',
-            from: '3217998214@qq.com',
-            to: '3217998214@qq.com',
-            subject: '研究报告: {{.input.topic}}',
-            body: '<h2>研究报告</h2><div>{{.node_2.content}}</div>',
-            content_type: 'text/html',
+          code: {
+            language: 'javascript',
+            code: 'var content = input.content || "{}"; try { var data = JSON.parse(content); return { payload: JSON.stringify({ source: "mcpflow", data: data }) }; } catch(e) { return { payload: JSON.stringify({ source: "mcpflow", raw: content }) }; }',
           },
         },
-        position: { x: 300, y: 380 },
+        position: { x: 300, y: 350 },
       },
-      { id: 'node_4', type: 'end', name: 'End', config: {}, position: { x: 300, y: 530 } },
+      {
+        id: 'node_4', type: 'http', name: 'Send to Webhook',
+        config: {
+          http: {
+            method: 'POST',
+            url: '{{input.webhook_url}}',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{{nodes.node_3.payload}}',
+          },
+        },
+        position: { x: 300, y: 500 },
+      },
+      { id: 'node_5', type: 'end', name: 'End', config: {}, position: { x: 300, y: 650 } },
     ],
     edges: [
       { id: 'e1-2', source: 'node_1', target: 'node_2' },
       { id: 'e2-3', source: 'node_2', target: 'node_3' },
       { id: 'e3-4', source: 'node_3', target: 'node_4' },
+      { id: 'e4-5', source: 'node_4', target: 'node_5' },
     ],
   },
 ]

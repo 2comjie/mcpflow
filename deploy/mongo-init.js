@@ -28,8 +28,8 @@ db.llm_providers.insertMany([
   },
   {
     name: "DeepSeek",
-    base_url: "https://api.deepseek.com/v1",
-    api_key: "sk-xxx",
+    base_url: "https://api.deepseek.com",
+    api_key: "sk-853775c33f6e4570817830bc86e62151",
     models: ["deepseek-chat", "deepseek-reasoner"],
     created_at: new Date(),
     updated_at: new Date(),
@@ -99,9 +99,9 @@ db.workflows.insertOne({
       name: "LLM 生成",
       config: {
         llm: {
-          base_url: "https://api.openai.com/v1",
-          api_key: "sk-xxx",
-          model: "gpt-4o-mini",
+          base_url: "https://api.deepseek.com",
+          api_key: "sk-853775c33f6e4570817830bc86e62151",
+          model: "deepseek-chat",
           prompt: "请用简短的语言介绍一下 {{input.topic}}",
           system_msg: "你是一个知识渊博的助手",
           temperature: 0.7,
