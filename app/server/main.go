@@ -6,7 +6,10 @@ import (
 	"log"
 	"os"
 
+	"github.com/2comjie/mcpflow/internal/api"
 	"github.com/2comjie/mcpflow/internal/config"
+	"github.com/2comjie/mcpflow/internal/engine"
+	"github.com/2comjie/mcpflow/internal/store"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -30,11 +33,12 @@ func main() {
 	defer client.Disconnect(context.TODO())
 
 	db := client.Database(cfg.Database.Name)
-	_ = db
+	s := store.New(db)
+	e := engine.New(s)
+	a := api.New(s, e)
 
 	r := gin.Default()
-
-	// TODO: register routes
+	a.RegisterRoutes(r)
 
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
 	log.Printf("MCPFlow server starting on %s", addr)
