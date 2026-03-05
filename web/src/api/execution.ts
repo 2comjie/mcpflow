@@ -28,22 +28,22 @@ export interface ExecutionLog {
   node_id: string
   node_name: string
   node_type: string
-  attempt: number
   status: string
   input: Record<string, any>
   output: Record<string, any>
   error: string
   duration: number
+  agent_steps?: any[]
   created_at: string
 }
 
 export const executionApi = {
-  list: (page = 1, size = 20) =>
-    request.get('/executions', { params: { page, size } }),
+  list: (page = 1, page_size = 20) =>
+    request.get('/executions', { params: { page, page_size } }),
   get: (id: string) => request.get(`/executions/${id}`),
   logs: (id: string) => request.get(`/executions/${id}/logs`),
   delete: (id: string) => request.delete(`/executions/${id}`),
-  listByWorkflow: (workflowId: string, page = 1, size = 20) =>
-    request.get(`/workflows/${workflowId}/executions`, { params: { page, size } }),
+  listByWorkflow: (workflowId: string, page = 1, page_size = 20) =>
+    request.get(`/workflows/${workflowId}/executions`, { params: { page, page_size } }),
   stats: () => request.get('/stats'),
 }

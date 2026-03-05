@@ -66,7 +66,8 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
       setFetching(true)
       workflowApi
         .get(workflowId)
-        .then((wf: any) => {
+        .then((res: any) => {
+          const wf = res.data || res
           const vars = extractInputVars(wf.nodes || [])
           setInputVars(vars)
           setMode(vars.length > 0 ? 'form' : 'json')

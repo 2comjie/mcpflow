@@ -47,7 +47,7 @@ export default function Dashboard() {
   useEffect(() => {
     workflowApi.list().then((res: any) => setWorkflows(res.data || [])).catch(() => {})
     mcpServerApi.list().then((res: any) => setServers(res.data || [])).catch(() => {})
-    executionApi.stats().then((res: any) => setStats(res || {})).catch(() => {})
+    executionApi.stats().then((res: any) => setStats(res.data || res || {})).catch(() => {})
   }, [])
 
   const activeServers = servers.filter((s) => s.status === 'active').length

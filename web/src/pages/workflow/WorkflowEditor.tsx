@@ -87,9 +87,10 @@ export default function WorkflowEditor() {
       workflowApi
         .get(id)
         .then((res: any) => {
-          setName(res.name)
-          setDescription(res.description || '')
-          const flowNodes = (res.nodes || []).map((n: any) => {
+          const wf = res.data || res
+          setName(wf.name)
+          setDescription(wf.description || '')
+          const flowNodes = (wf.nodes || []).map((n: any) => {
             const nt = allNodeTypes.find((t) => t.type === n.type)
             return {
               id: n.id,
@@ -106,7 +107,7 @@ export default function WorkflowEditor() {
               },
             }
           })
-          const flowEdges = (res.edges || []).map((e: any) => ({
+          const flowEdges = (wf.edges || []).map((e: any) => ({
             id: e.id,
             source: e.source,
             target: e.target,
@@ -266,7 +267,8 @@ export default function WorkflowEditor() {
   const handleLLMProviderChange = async (providerId: string, configKey: 'llm' | 'agent' = 'llm') => {
     if (!selectedNode) return
     try {
-      const provider: any = await llmProviderApi.get(providerId)
+      const res: any = await llmProviderApi.get(providerId)
+      const provider = res.data || res
       const config = JSON.parse(JSON.stringify((selectedNode.data as any).config || {}))
       if (!config[configKey]) config[configKey] = {}
       config[configKey].base_url = provider.base_url

@@ -125,9 +125,9 @@ func (s *Store) GetExecutionStats() (map[string]any, error) {
 	failed, _ := s.executions().CountDocuments(ctx, bson.M{"status": "failed"})
 
 	stats := map[string]any{
-		"total_executions":   total,
-		"success_executions": success,
-		"failed_executions":  failed,
+		"total_executions": total,
+		"success_count":    success,
+		"failed_count":     failed,
 	}
 
 	if total > 0 {

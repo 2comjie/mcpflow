@@ -140,7 +140,7 @@ func (a *API) CheckMCPServer(c *gin.Context) {
 
 	now := time.Now()
 	updates := map[string]any{
-		"status":     "connected",
+		"status":     "active",
 		"tools":      tools,
 		"prompts":    prompts,
 		"resources":  resources,

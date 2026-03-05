@@ -137,7 +137,8 @@ export default function MCPServerList() {
   const handleTest = async (id: string) => {
     try {
       const res: any = await mcpServerApi.check(id)
-      message.success(`Connected, ${res.tools?.length || 0} tools found`)
+      const srv = res.data || res
+      message.success(`Connected, ${srv.tools?.length || 0} tools found`)
       fetchList()
     } catch (err: any) {
       message.error(err.message)
@@ -158,10 +159,11 @@ export default function MCPServerList() {
     setDetailLoading(true)
     try {
       const res: any = await mcpServerApi.check(detailServer.id)
-      setDetailServer(res)
-      setTools(res.tools || [])
-      setPrompts(res.prompts || [])
-      setResources(res.resources || [])
+      const srv = res.data || res
+      setDetailServer(srv)
+      setTools(srv.tools || [])
+      setPrompts(srv.prompts || [])
+      setResources(srv.resources || [])
     } catch (err: any) {
       message.error(err.message)
     } finally {
@@ -194,8 +196,9 @@ export default function MCPServerList() {
     try {
       const args = JSON.parse(testArgs)
       const res: any = await mcpServerApi.callTool(detailServer.id, testTool.name, args)
-      setTestResult(res.result)
-      setTestDuration(res.duration)
+      const data = res.data || res
+      setTestResult(data.result)
+      setTestDuration(data.duration)
     } catch (err: any) {
       setTestResult({ error: err.message })
     } finally {

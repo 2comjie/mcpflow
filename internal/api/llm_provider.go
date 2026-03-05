@@ -55,6 +55,12 @@ func (a *API) UpdateLLMProvider(c *gin.Context) {
 	}
 	delete(updates, "id")
 	delete(updates, "_id")
+	// 如果 api_key 为空字符串，不更新（保留原值）
+	if v, ok := updates["api_key"]; ok {
+		if s, ok := v.(string); ok && s == "" {
+			delete(updates, "api_key")
+		}
+	}
 	if err := a.store.UpdateLLMProvider(id, updates); err != nil {
 		fail(c, 500, err.Error())
 		return

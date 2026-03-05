@@ -68,15 +68,16 @@ export default function AgentPlayground() {
         max_tokens: maxTokens,
         max_iterations: maxIterations,
       })
+      const data = res.data || res
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: res.content || '',
-          agent_steps: res.agent_steps,
-          tool_calls_count: res.tool_calls_count,
-          iterations: res.iterations,
-          total_tokens: res.total_tokens,
+          content: data.content || '',
+          agent_steps: data.agent_steps,
+          tool_calls_count: data.tool_calls_count,
+          iterations: data.iterations,
+          total_tokens: data.total_tokens,
         },
       ])
     } catch (err: any) {

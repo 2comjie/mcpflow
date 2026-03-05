@@ -70,7 +70,8 @@ export default function WorkflowList() {
       })
       message.success('Workflow created from template')
       setTemplateModalOpen(false)
-      navigate(`/workflows/${res.id}`)
+      const wf = res.data || res
+      navigate(`/workflows/${wf.id}`)
     } catch (err: any) {
       message.error(err.message)
     } finally {

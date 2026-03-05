@@ -93,13 +93,13 @@ export interface Edge {
 }
 
 export const workflowApi = {
-  list: (page = 1, size = 20) => request.get('/workflows', { params: { page, size } }),
+  list: (page = 1, page_size = 20) => request.get('/workflows', { params: { page, page_size } }),
   get: (id: string) => request.get(`/workflows/${id}`),
   create: (data: Partial<Workflow>) => request.post('/workflows', data),
   update: (id: string, data: Partial<Workflow>) => request.put(`/workflows/${id}`, data),
   delete: (id: string) => request.delete(`/workflows/${id}`),
   execute: (id: string, input?: Record<string, any>) =>
     request.post(`/workflows/${id}/execute`, input || {}),
-  listExecutions: (id: string, page = 1, size = 20) =>
-    request.get(`/workflows/${id}/executions`, { params: { page, size } }),
+  listExecutions: (id: string, page = 1, page_size = 20) =>
+    request.get(`/workflows/${id}/executions`, { params: { page, page_size } }),
 }

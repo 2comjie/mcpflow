@@ -69,7 +69,7 @@ export default function ExecutionList() {
     if (!workflowId) return
     workflowApi
       .get(workflowId)
-      .then((res: any) => setWorkflowName(res.name))
+      .then((res: any) => setWorkflowName((res.data || res).name))
       .catch(() => {})
     loadExecutions()
   }, [workflowId])
@@ -90,7 +90,7 @@ export default function ExecutionList() {
         executionApi.get(execId),
         executionApi.logs(execId),
       ])
-      setDetail(exec)
+      setDetail(exec.data || exec)
       setLogs(Array.isArray(logsRes) ? logsRes : logsRes.data || [])
       setDrawerOpen(true)
     } catch (err: any) {
@@ -229,9 +229,6 @@ export default function ExecutionList() {
                         >
                           {log.status}
                         </Tag>
-                        {log.attempt > 1 && (
-                          <Tag style={{ fontSize: 11 }}>attempt #{log.attempt}</Tag>
-                        )}
                       </div>
                       <div style={{ fontSize: 12, color: '#667085' }}>
                         Type: {log.node_type} | Duration: {log.duration}ms
