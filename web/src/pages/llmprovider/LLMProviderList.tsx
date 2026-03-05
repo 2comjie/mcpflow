@@ -1,127 +1,200 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, Table, Space, Modal, Form, Input, message, Popconfirm, Typography, Tag } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { llmProviderApi } from '../../api/llmprovider';
+import { useEffect, useState } from 'react'
+import { Button, Table, Modal, Form, Input, message, Popconfirm, Space, Tag } from 'antd'
+import { PlusOutlined, DeleteOutlined, EditOutlined, RobotOutlined } from '@ant-design/icons'
+import { llmProviderApi, type LLMProvider } from '../../api/llm_provider'
 
 export default function LLMProviderList() {
-  const [providers, setProviders] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form] = Form.useForm();
+  const [providers, setProviders] = useState<LLMProvider[]>([])
+  const [loading, setLoading] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form] = Form.useForm()
 
   const load = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const res: any = await llmProviderApi.list();
-      setProviders(res.data || []);
+      const res: any = await llmProviderApi.list()
+      setProviders(Array.isArray(res) ? res : res.data || [])
+    } catch (err: any) {
+      message.error(err.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load()
+  }, [])
 
-  const handleSave = async () => {
-    const values = await form.validateFields();
-    // models 输入为逗号分隔字符串，转为数组
-    if (typeof values.models === 'string') {
-      values.models = values.models.split(',').map((s: string) => s.trim()).filter(Boolean);
+  const handleSubmit = async () => {
+    try {
+      const values = await form.validateFields()
+      // 处理 models：逗号分隔字符串转数组
+      if (typeof values.models === 'string') {
+        values.models = values.models
+          .split(',')
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+      }
+      if (editingId) {
+        await llmProviderApi.update(editingId, values)
+        message.success('Updated')
+      } else {
+        await llmProviderApi.create(values)
+        message.success('Created')
+      }
+      setModalOpen(false)
+      form.resetFields()
+      setEditingId(null)
+      load()
+    } catch (err: any) {
+      if (err.message) message.error(err.message)
     }
-    if (editId) {
-      await llmProviderApi.update(editId, values);
-      message.success('更新成功');
-    } else {
-      await llmProviderApi.create(values);
-      message.success('创建成功');
-    }
-    setModalOpen(false);
-    setEditId(null);
-    form.resetFields();
-    load();
-  };
-
-  const handleEdit = (record: any) => {
-    setEditId(record.id);
-    form.setFieldsValue({
-      ...record,
-      models: record.models?.join(', ') || '',
-      api_key: record.api_key,
-    });
-    setModalOpen(true);
-  };
+  }
 
   const handleDelete = async (id: string) => {
-    await llmProviderApi.delete(id);
-    message.success('删除成功');
-    load();
-  };
+    try {
+      await llmProviderApi.delete(id)
+      message.success('Deleted')
+      load()
+    } catch (err: any) {
+      message.error(err.message)
+    }
+  }
+
+  const openCreate = () => {
+    setEditingId(null)
+    form.resetFields()
+    setModalOpen(true)
+  }
+
+  const openEdit = (record: LLMProvider) => {
+    setEditingId(record.id)
+    form.setFieldsValue({
+      ...record,
+      api_key: '', // 编辑时不回填脱敏的 key
+      models: Array.isArray(record.models) ? record.models.join(', ') : '',
+    })
+    setModalOpen(true)
+  }
 
   const columns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: 'Base URL', dataIndex: 'base_url', key: 'base_url', ellipsis: true },
     {
-      title: '模型',
-      dataIndex: 'models',
-      key: 'models',
-      render: (models: string[]) => models?.map((m) => <Tag key={m}>{m}</Tag>) || '-',
+      title: 'Name',
+      dataIndex: 'name',
+      render: (text: string) => (
+        <span style={{ fontWeight: 500 }}>
+          <RobotOutlined style={{ marginRight: 6, color: '#3b5bdb' }} />
+          {text}
+        </span>
+      ),
+    },
+    {
+      title: 'Base URL',
+      dataIndex: 'base_url',
+      ellipsis: true,
+      render: (text: string) => (
+        <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{text}</span>
+      ),
     },
     {
       title: 'API Key',
       dataIndex: 'api_key',
-      width: 180,
-      render: (k: string) => k ? `${k.slice(0, 6)}...${k.slice(-4)}` : '-',
+      width: 160,
+      render: (text: string) => (
+        <span style={{ fontFamily: 'monospace', fontSize: 12, color: '#98a2b3' }}>{text}</span>
+      ),
     },
     {
-      title: '操作',
-      key: 'action',
-      width: 150,
-      render: (_: any, r: any) => (
+      title: 'Models',
+      dataIndex: 'models',
+      render: (models: string[]) =>
+        models && models.length > 0 ? (
+          <Space size={4} wrap>
+            {models.map((m) => (
+              <Tag key={m} style={{ borderRadius: 4, fontSize: 11 }}>
+                {m}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '-'
+        ),
+    },
+    {
+      title: 'Actions',
+      width: 120,
+      render: (_: any, record: LLMProvider) => (
         <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => handleEdit(r)}>
-            编辑
-          </Button>
-          <Popconfirm title="确认删除?" onConfirm={() => handleDelete(r.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
+          <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)} />
+          <Popconfirm title="Delete this provider?" onConfirm={() => handleDelete(record.id)}>
+            <Button type="text" size="small" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
       ),
     },
-  ];
+  ]
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>LLM 供应商</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditId(null); form.resetFields(); setModalOpen(true); }}>
-          添加供应商
+      <div className="page-header">
+        <div>
+          <h2>LLM Providers</h2>
+          <div className="page-header-sub">
+            Manage LLM provider configurations for workflow nodes
+          </div>
+        </div>
+        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          Add Provider
         </Button>
       </div>
-      <Card>
-        <Table rowKey="id" columns={columns} dataSource={providers} loading={loading} pagination={false} />
-      </Card>
+
+      <Table
+        dataSource={providers}
+        columns={columns}
+        rowKey="id"
+        loading={loading}
+        pagination={false}
+        style={{ background: '#fff', borderRadius: 12 }}
+      />
 
       <Modal
-        title={editId ? '编辑 LLM 供应商' : '添加 LLM 供应商'}
+        title={editingId ? 'Edit LLM Provider' : 'Add LLM Provider'}
         open={modalOpen}
-        onOk={handleSave}
-        onCancel={() => { setModalOpen(false); setEditId(null); form.resetFields(); }}
+        onOk={handleSubmit}
+        onCancel={() => {
+          setModalOpen(false)
+          setEditingId(null)
+        }}
+        destroyOnClose
       >
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="例如：DeepSeek" />
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="name"
+            label="Name"
+            rules={[{ required: true, message: 'Name is required' }]}
+          >
+            <Input placeholder="e.g. DeepSeek, OpenAI" />
           </Form.Item>
-          <Form.Item name="base_url" label="Base URL" rules={[{ required: true }]}>
-            <Input placeholder="https://api.deepseek.com/v1" />
+          <Form.Item
+            name="base_url"
+            label="Base URL"
+            rules={[{ required: true, message: 'Base URL is required' }]}
+          >
+            <Input placeholder="https://api.deepseek.com/v1" style={{ fontFamily: 'monospace' }} />
           </Form.Item>
-          <Form.Item name="api_key" label="API Key" rules={[{ required: true }]}>
-            <Input.Password placeholder="sk-..." />
+          <Form.Item
+            name="api_key"
+            label="API Key"
+            rules={editingId ? [] : [{ required: true, message: 'API Key is required' }]}
+          >
+            <Input.Password placeholder={editingId ? 'Leave empty to keep current' : 'Enter API key'} />
           </Form.Item>
-          <Form.Item name="models" label="模型（逗号分隔）" rules={[{ required: true }]}>
-            <Input placeholder="deepseek-chat, deepseek-reasoner" />
+          <Form.Item name="models" label="Models">
+            <Input placeholder="deepseek-chat, deepseek-coder (comma separated)" />
           </Form.Item>
         </Form>
       </Modal>
     </div>
-  );
+  )
 }

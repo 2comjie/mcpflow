@@ -155,3 +155,71 @@ func (a *API) CheckMCPServer(c *gin.Context) {
 func updateServerStatus(a *API, id bson.ObjectID, status string) {
 	_ = a.store.UpdateMCPServer(id, map[string]any{"status": status})
 }
+
+// CallMCPTool 调用 MCP 服务器上的工具
+func (a *API) CallMCPTool(c *gin.Context) {
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
+	if err != nil {
+		fail(c, 400, "invalid id")
+		return
+	}
+	srv, err := a.store.GetMCPServer(id)
+	if err != nil {
+		fail(c, 404, "mcp server not found")
+		return
+	}
+
+	var req struct {
+		ToolName  string         `json:"tool_name"`
+		Arguments map[string]any `json:"arguments"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		fail(c, 400, err.Error())
+		return
+	}
+	if req.ToolName == "" {
+		fail(c, 400, "tool_name is required")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	mcpClient, err := client.NewSSEMCPClient(srv.URL, client.WithHeaders(srv.Headers))
+	if err != nil {
+		fail(c, 500, "connect failed: "+err.Error())
+		return
+	}
+	defer mcpClient.Close()
+
+	if err := mcpClient.Start(ctx); err != nil {
+		fail(c, 500, "start failed: "+err.Error())
+		return
+	}
+
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow", Version: "1.0"}
+	if _, err := mcpClient.Initialize(ctx, initReq); err != nil {
+		fail(c, 500, "init failed: "+err.Error())
+		return
+	}
+
+	callReq := mcp.CallToolRequest{}
+	callReq.Params.Name = req.ToolName
+	callReq.Params.Arguments = req.Arguments
+
+	start := time.Now()
+	result, err := mcpClient.CallTool(ctx, callReq)
+	duration := time.Since(start).Milliseconds()
+
+	if err != nil {
+		fail(c, 500, "call tool failed: "+err.Error())
+		return
+	}
+
+	ok(c, gin.H{
+		"result":   result.Content,
+		"duration": duration,
+	})
+}

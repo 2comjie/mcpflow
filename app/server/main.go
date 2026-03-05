@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"github.com/2comjie/mcpflow/internal/api"
@@ -14,6 +15,19 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
+
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Header("Access-Control-Allow-Origin", "*")
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		if c.Request.Method == http.MethodOptions {
+			c.AbortWithStatus(http.StatusNoContent)
+			return
+		}
+		c.Next()
+	}
+}
 
 func main() {
 	cfgPath := "configs/config.yml"
@@ -38,6 +52,7 @@ func main() {
 	a := api.New(s, e)
 
 	r := gin.Default()
+	r.Use(corsMiddleware())
 	a.RegisterRoutes(r)
 
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)

@@ -1,128 +1,351 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, Table, Space, Modal, Form, Input, message, Popconfirm, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
-import { workflowApi } from '../../api/workflow';
+import { useEffect, useState } from 'react'
+import { Button, Row, Col, Dropdown, message, Input, Modal, Tag, Space, Empty } from 'antd'
+import {
+  PlusOutlined,
+  SearchOutlined,
+  ApartmentOutlined,
+  ClockCircleOutlined,
+  NodeIndexOutlined,
+  MoreOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlayCircleOutlined,
+  UnorderedListOutlined,
+  AppstoreOutlined,
+  RocketOutlined,
+} from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
+import { workflowApi, type Workflow } from '../../api/workflow'
+import { workflowTemplates, templateCategoryLabels, type WorkflowTemplate } from '../../data/workflowTemplates'
+import ExecuteWorkflowModal from '../../components/ExecuteWorkflowModal'
 
 export default function WorkflowList() {
-  const [workflows, setWorkflows] = useState<any[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form] = Form.useForm();
-  const navigate = useNavigate();
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [loading, setLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [templateCategory, setTemplateCategory] = useState('all')
+  const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null)
+  const [executeWorkflowId, setExecuteWorkflowId] = useState<string | null>(null)
+  const navigate = useNavigate()
 
-  const load = async (p = page) => {
-    setLoading(true);
+  const fetchList = async () => {
+    setLoading(true)
     try {
-      const res: any = await workflowApi.list(p, 20);
-      setWorkflows(res.data || []);
-      setTotal(res.total || 0);
+      const res: any = await workflowApi.list()
+      setWorkflows(res.data || [])
+    } catch (err: any) {
+      message.error(err.message)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  useEffect(() => { load(); }, [page]);
-
-  const handleCreate = async () => {
-    const values = await form.validateFields();
-    await workflowApi.create({
-      ...values,
-      nodes: [],
-      edges: [],
-    });
-    message.success('创建成功');
-    setModalOpen(false);
-    form.resetFields();
-    load();
-  };
+  useEffect(() => {
+    fetchList()
+  }, [])
 
   const handleDelete = async (id: string) => {
-    await workflowApi.delete(id);
-    message.success('删除成功');
-    load();
-  };
-
-  const handleExecute = async (id: string) => {
-    const res: any = await workflowApi.execute(id);
-    const exec = res.data;
-    if (exec) {
-      message.success('执行完成');
-      navigate(`/executions/${exec.id}`);
+    try {
+      await workflowApi.delete(id)
+      message.success('Deleted')
+      fetchList()
+    } catch (err: any) {
+      message.error(err.message)
     }
-  };
+  }
 
-  const columns = [
-    { title: '名称', dataIndex: 'name', key: 'name' },
-    { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
-    {
-      title: '节点数',
-      key: 'nodes',
-      render: (_: any, r: any) => r.nodes?.length || 0,
-      width: 80,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      render: (t: string) => t ? new Date(t).toLocaleString() : '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 220,
-      render: (_: any, r: any) => (
-        <Space>
-          <Button size="small" icon={<EditOutlined />} onClick={() => navigate(`/workflows/${r.id}`)}>
-            编辑
-          </Button>
-          <Button size="small" type="primary" icon={<PlayCircleOutlined />} onClick={() => handleExecute(r.id)}>
-            执行
-          </Button>
-          <Popconfirm title="确认删除?" onConfirm={() => handleDelete(r.id)}>
-            <Button size="small" danger icon={<DeleteOutlined />} />
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+  const handleExecute = (id: string) => {
+    setExecuteWorkflowId(id)
+  }
+
+  const handleUseTemplate = async (template: WorkflowTemplate) => {
+    setCreatingTemplate(template.id)
+    try {
+      const res: any = await workflowApi.create({
+        name: template.name,
+        description: template.description,
+        nodes: template.nodes,
+        edges: template.edges,
+      })
+      message.success('Workflow created from template')
+      setTemplateModalOpen(false)
+      navigate(`/workflows/${res.id}`)
+    } catch (err: any) {
+      message.error(err.message)
+    } finally {
+      setCreatingTemplate(null)
+    }
+  }
+
+  const filteredTemplates = workflowTemplates.filter(
+    (t) => templateCategory === 'all' || t.category === templateCategory,
+  )
+
+  const filtered = workflows.filter(
+    (w) =>
+      w.name.toLowerCase().includes(search.toLowerCase()) ||
+      (w.description || '').toLowerCase().includes(search.toLowerCase()),
+  )
+
+  const formatTime = (t: string) => {
+    if (!t) return '-'
+    const d = new Date(t)
+    const now = new Date()
+    const diff = now.getTime() - d.getTime()
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
-        <Typography.Title level={4} style={{ margin: 0 }}>工作流管理</Typography.Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
-          新建工作流
-        </Button>
+      <div className="page-header">
+        <div>
+          <h2>Workflows</h2>
+          <div className="page-header-sub">
+            Create and manage your automation workflows
+          </div>
+        </div>
+        <Space>
+          <Button
+            icon={<AppstoreOutlined />}
+            onClick={() => setTemplateModalOpen(true)}
+            style={{ borderRadius: 10 }}
+          >
+            Templates
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/workflows/new')}
+            style={{ borderRadius: 10 }}
+          >
+            New Workflow
+          </Button>
+        </Space>
       </div>
-      <Card>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={workflows}
-          loading={loading}
-          pagination={{ current: page, total, pageSize: 20, onChange: setPage }}
-        />
-      </Card>
 
+      {workflows.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <Input
+            prefix={<SearchOutlined style={{ color: '#98a2b3' }} />}
+            placeholder="Search workflows..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            allowClear
+            style={{
+              maxWidth: 360,
+              borderRadius: 10,
+              height: 40,
+            }}
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <Row gutter={[16, 16]}>
+          {[1, 2, 3].map((i) => (
+            <Col key={i} xs={24} sm={12} lg={8} xl={6}>
+              <div className="workflow-card" style={{ opacity: 0.5, height: 180 }}>
+                <div style={{ background: '#f2f4f7', height: 20, width: '60%', borderRadius: 4, marginBottom: 8 }} />
+                <div style={{ background: '#f2f4f7', height: 14, width: '80%', borderRadius: 4 }} />
+              </div>
+            </Col>
+          ))}
+        </Row>
+      ) : filtered.length === 0 ? (
+        <div className="empty-state">
+          <ApartmentOutlined className="empty-state-icon" />
+          <div className="empty-state-title">
+            {search ? 'No matching workflows' : 'No workflows yet'}
+          </div>
+          <div className="empty-state-desc">
+            {search
+              ? 'Try different keywords'
+              : 'Create your first workflow to start building automation pipelines'}
+          </div>
+          {!search && (
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => navigate('/workflows/new')}
+              style={{ borderRadius: 10 }}
+            >
+              New Workflow
+            </Button>
+          )}
+        </div>
+      ) : (
+        <Row gutter={[16, 16]}>
+          {filtered.map((w) => (
+            <Col key={w.id} xs={24} sm={12} lg={8} xl={6}>
+              <div
+                className="workflow-card"
+                onClick={() => navigate(`/workflows/${w.id}`)}
+              >
+                <div className="workflow-card-title">
+                  <ApartmentOutlined style={{ color: '#3b5bdb', fontSize: 16 }} />
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {w.name || 'Untitled'}
+                  </span>
+                </div>
+
+                <div className="workflow-card-desc">
+                  {w.description || 'No description'}
+                </div>
+
+                <div className="workflow-card-footer">
+                  <div className="workflow-card-meta">
+                    <span>
+                      <NodeIndexOutlined />
+                      {w.nodes?.length || 0} nodes
+                    </span>
+                    <span>
+                      <ClockCircleOutlined />
+                      {formatTime(w.updated_at)}
+                    </span>
+                  </div>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      items: [
+                        {
+                          key: 'edit',
+                          icon: <EditOutlined />,
+                          label: 'Edit',
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            navigate(`/workflows/${w.id}`)
+                          },
+                        },
+                        {
+                          key: 'run',
+                          icon: <PlayCircleOutlined />,
+                          label: 'Execute',
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            handleExecute(w.id)
+                          },
+                        },
+                        {
+                          key: 'executions',
+                          icon: <UnorderedListOutlined />,
+                          label: 'Executions',
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            navigate(`/workflows/${w.id}/executions`)
+                          },
+                        },
+                        { type: 'divider' },
+                        {
+                          key: 'delete',
+                          icon: <DeleteOutlined />,
+                          label: 'Delete',
+                          danger: true,
+                          onClick: (e) => {
+                            e.domEvent.stopPropagation()
+                            handleDelete(w.id)
+                          },
+                        },
+                      ],
+                    }}
+                  >
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<MoreOutlined />}
+                      onClick={(e) => e.stopPropagation()}
+                      style={{ color: '#98a2b3' }}
+                    />
+                  </Dropdown>
+                </div>
+              </div>
+            </Col>
+          ))}
+        </Row>
+      )}
+
+      {/* Template Modal */}
       <Modal
-        title="新建工作流"
-        open={modalOpen}
-        onOk={handleCreate}
-        onCancel={() => { setModalOpen(false); form.resetFields(); }}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <AppstoreOutlined style={{ color: '#3b5bdb' }} />
+            Workflow Templates
+          </div>
+        }
+        open={templateModalOpen}
+        onCancel={() => {
+          setTemplateModalOpen(false)
+          setTemplateCategory('all')
+        }}
+        footer={null}
+        width={720}
+        styles={{ body: { paddingTop: 12 } }}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="输入工作流名称" />
-          </Form.Item>
-          <Form.Item name="description" label="描述">
-            <Input.TextArea rows={3} placeholder="描述工作流用途" />
-          </Form.Item>
-        </Form>
+        <div style={{ marginBottom: 16 }}>
+          <Space size={4}>
+            {Object.entries(templateCategoryLabels).map(([key, label]) => (
+              <Tag
+                key={key}
+                color={templateCategory === key ? 'blue' : undefined}
+                style={{ cursor: 'pointer', borderRadius: 6, padding: '2px 10px' }}
+                onClick={() => setTemplateCategory(key)}
+              >
+                {label}
+              </Tag>
+            ))}
+          </Space>
+        </div>
+
+        <Row gutter={[12, 12]}>
+          {filteredTemplates.map((template) => (
+            <Col key={template.id} xs={24} sm={12}>
+              <div
+                style={{
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: 10,
+                  border: '1px solid #eaecf0',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{template.name}</div>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<RocketOutlined />}
+                    loading={creatingTemplate === template.id}
+                    onClick={() => handleUseTemplate(template)}
+                    style={{ borderRadius: 6 }}
+                  >
+                    Use
+                  </Button>
+                </div>
+                <div style={{ fontSize: 12, color: '#667085', marginBottom: 8, lineHeight: 1.5 }}>
+                  {template.description}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#98a2b3' }}>
+                  <span><NodeIndexOutlined /> {template.nodes.length} nodes</span>
+                  <Tag style={{ fontSize: 11, borderRadius: 4, margin: 0 }}>{template.category}</Tag>
+                </div>
+              </div>
+            </Col>
+          ))}
+          {filteredTemplates.length === 0 && (
+            <Col span={24}>
+              <Empty description="No templates in this category" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            </Col>
+          )}
+        </Row>
       </Modal>
+
+      <ExecuteWorkflowModal
+        open={executeWorkflowId !== null}
+        workflowId={executeWorkflowId}
+        onClose={() => setExecuteWorkflowId(null)}
+      />
     </div>
-  );
+  )
 }

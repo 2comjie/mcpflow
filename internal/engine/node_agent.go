@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/mark3labs/mcp-go/client"
@@ -80,7 +81,8 @@ func executeAgent(cfg *model.AgentConfig, ctx *WorkflowContext) (any, error) {
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-		resp, err := http.DefaultClient.Do(req)
+		httpClient := &http.Client{Timeout: 120 * time.Second}
+		resp, err := httpClient.Do(req)
 		if err != nil {
 			return nil, fmt.Errorf("agent request: %w", err)
 		}
@@ -165,13 +167,22 @@ func collectMCPTools(servers []model.AgentMCPServer) ([]map[string]any, map[stri
 	var allTools []map[string]any
 	clients := make(map[string]*client.Client)
 
+	// cleanup 用于出错时关闭已连接的客户端
+	cleanup := func() {
+		for _, c := range clients {
+			_ = c.Close()
+		}
+	}
+
 	for _, srv := range servers {
 		c, err := client.NewSSEMCPClient(srv.URL, client.WithHeaders(srv.Headers))
 		if err != nil {
+			cleanup()
 			return nil, nil, fmt.Errorf("connect mcp %s: %w", srv.URL, err)
 		}
 
 		if err := c.Start(context.Background()); err != nil {
+			cleanup()
 			return nil, nil, fmt.Errorf("start mcp %s: %w", srv.URL, err)
 		}
 
@@ -179,6 +190,7 @@ func collectMCPTools(servers []model.AgentMCPServer) ([]map[string]any, map[stri
 		initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 		initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow-agent", Version: "1.0"}
 		if _, err := c.Initialize(context.Background(), initReq); err != nil {
+			cleanup()
 			return nil, nil, fmt.Errorf("init mcp %s: %w", srv.URL, err)
 		}
 

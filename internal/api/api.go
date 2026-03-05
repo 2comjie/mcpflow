@@ -26,6 +26,7 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	wf.PUT("/:id", a.UpdateWorkflow)
 	wf.DELETE("/:id", a.DeleteWorkflow)
 	wf.POST("/:id/execute", a.ExecuteWorkflow)
+	wf.POST("/:id/execute/stream", a.ExecuteWorkflowStream)
 
 	// 执行记录
 	exec := v1.Group("/executions")
@@ -45,6 +46,7 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	mcp.PUT("/:id", a.UpdateMCPServer)
 	mcp.DELETE("/:id", a.DeleteMCPServer)
 	mcp.POST("/:id/check", a.CheckMCPServer)
+	mcp.POST("/:id/tools/call", a.CallMCPTool)
 
 	// LLM Provider
 	llm := v1.Group("/llm-providers")
@@ -53,6 +55,9 @@ func (a *API) RegisterRoutes(r *gin.Engine) {
 	llm.GET("/:id", a.GetLLMProvider)
 	llm.PUT("/:id", a.UpdateLLMProvider)
 	llm.DELETE("/:id", a.DeleteLLMProvider)
+
+	// Agent Playground
+	v1.POST("/agent/chat", a.AgentChat)
 
 	// 统计
 	v1.GET("/stats", a.GetStats)

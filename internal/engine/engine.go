@@ -127,6 +127,140 @@ func (e *Engine) ExecuteWorkflow(wf *model.Workflow, input map[string]any) (*mod
 	return exec, nil
 }
 
+// NodeEvent 节点执行事件（用于 SSE 推送）
+type NodeEvent struct {
+	NodeID   string `json:"node_id"`
+	NodeName string `json:"node_name"`
+	NodeType string `json:"node_type"`
+	Status   string `json:"status"`
+	Error    string `json:"error,omitempty"`
+	Duration int64  `json:"duration,omitempty"`
+}
+
+// ExecuteWorkflowWithEvents 执行工作流并通过 channel 推送事件
+func (e *Engine) ExecuteWorkflowWithEvents(wf *model.Workflow, input map[string]any, events chan<- NodeEvent) (*model.Execution, error) {
+	exec := &model.Execution{
+		WorkflowID: wf.ID,
+		Status:     model.ExecRunning,
+		Input:      input,
+		NodeStates: make(map[string]NodeState),
+	}
+	now := time.Now()
+	exec.StartedAt = &now
+	if err := e.store.CreateExecution(exec); err != nil {
+		return nil, fmt.Errorf("create execution: %w", err)
+	}
+
+	order, err := topoSort(wf.Nodes, wf.Edges)
+	if err != nil {
+		return e.failExecution(exec, err)
+	}
+
+	nodeMap := make(map[string]*model.Node)
+	for i := range wf.Nodes {
+		nodeMap[wf.Nodes[i].ID] = &wf.Nodes[i]
+	}
+
+	reverseEdges := buildReverseEdgeMap(wf.Edges)
+	edgeMap := buildEdgeMap(wf.Edges)
+
+	ctx := &WorkflowContext{
+		Input:      input,
+		NodeOutput: make(map[string]any),
+		EdgeMap:    edgeMap,
+		ExecOrder:  order,
+	}
+
+	skipped := make(map[string]bool)
+
+	for _, nodeID := range order {
+		node := nodeMap[nodeID]
+		if node == nil {
+			continue
+		}
+
+		if shouldSkip(nodeID, reverseEdges, ctx, skipped) {
+			skipped[nodeID] = true
+			exec.NodeStates[node.ID] = NodeState{NodeID: node.ID, Status: "skipped"}
+			continue
+		}
+
+		// 发送 running 事件
+		if events != nil {
+			events <- NodeEvent{
+				NodeID:   node.ID,
+				NodeName: node.Name,
+				NodeType: string(node.Type),
+				Status:   "running",
+			}
+		}
+
+		start := time.Now()
+		output, err := e.executeNode(node, ctx)
+		duration := time.Since(start).Milliseconds()
+
+		state := NodeState{
+			NodeID:   node.ID,
+			Status:   "completed",
+			Output:   output,
+			Duration: duration,
+		}
+		if err != nil {
+			state.Status = "failed"
+			state.Error = err.Error()
+		}
+		exec.NodeStates[node.ID] = state
+
+		// 发送完成/失败事件
+		if events != nil {
+			evt := NodeEvent{
+				NodeID:   node.ID,
+				NodeName: node.Name,
+				NodeType: string(node.Type),
+				Status:   state.Status,
+				Duration: duration,
+			}
+			if err != nil {
+				evt.Error = err.Error()
+			}
+			events <- evt
+		}
+
+		log := &model.ExecutionLog{
+			ExecutionID: exec.ID,
+			NodeID:      node.ID,
+			NodeName:    node.Name,
+			NodeType:    string(node.Type),
+			Status:      state.Status,
+			Output:      toMapAny(output),
+			Error:       state.Error,
+			Duration:    duration,
+		}
+		if steps, ok := output.(AgentResult); ok {
+			log.AgentSteps = steps.Steps
+			log.Output = map[string]any{"content": steps.Content}
+		}
+		_ = e.store.CreateExecutionLog(log)
+
+		if err != nil {
+			return e.failExecution(exec, err)
+		}
+		ctx.NodeOutput[node.ID] = output
+	}
+
+	finished := time.Now()
+	exec.FinishedAt = &finished
+	exec.Status = model.ExecCompleted
+	exec.Output = toMapAny(ctx.NodeOutput)
+	_ = e.store.UpdateExecution(exec.ID, map[string]any{
+		"status":      exec.Status,
+		"output":      exec.Output,
+		"node_states": exec.NodeStates,
+		"finished_at": exec.FinishedAt,
+	})
+	return exec, nil
+}
+
 func (e *Engine) failExecution(exec *model.Execution, err error) (*model.Execution, error) {
 	finished := time.Now()
 	exec.FinishedAt = &finished

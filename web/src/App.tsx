@@ -1,32 +1,63 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
-import zhCN from 'antd/locale/zh_CN';
-import AppLayout from './components/Layout';
-import Dashboard from './pages/dashboard/Dashboard';
-import WorkflowList from './pages/workflow/WorkflowList';
-import WorkflowEditor from './pages/workflow/WorkflowEditor';
-import ExecutionList from './pages/execution/ExecutionList';
-import ExecutionDetail from './pages/execution/ExecutionDetail';
-import MCPServerList from './pages/mcpserver/MCPServerList';
-import LLMProviderList from './pages/llmprovider/LLMProviderList';
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { ConfigProvider } from 'antd'
+import MainLayout from './layouts/MainLayout'
+import Dashboard from './pages/dashboard/Dashboard'
+import WorkflowList from './pages/workflow/WorkflowList'
+import WorkflowEditor from './pages/workflow/WorkflowEditor'
+import MCPServerList from './pages/mcpserver/MCPServerList'
+import LLMProviderList from './pages/llmprovider/LLMProviderList'
+import ExecutionList from './pages/execution/ExecutionList'
+import AllExecutions from './pages/execution/AllExecutions'
+import AgentPlayground from './pages/agent/AgentPlayground'
+
+const theme = {
+  token: {
+    colorPrimary: '#3b5bdb',
+    borderRadius: 8,
+    fontFamily:
+      "'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif",
+    colorBgLayout: '#f5f7fa',
+    colorBorderSecondary: '#eaecf0',
+  },
+  components: {
+    Button: {
+      borderRadius: 8,
+    },
+    Input: {
+      borderRadius: 8,
+    },
+    Select: {
+      borderRadius: 8,
+    },
+    Modal: {
+      borderRadiusLG: 12,
+    },
+    Card: {
+      borderRadiusLG: 12,
+    },
+    Menu: {
+      itemBorderRadius: 8,
+    },
+  },
+}
 
 export default function App() {
   return (
-    <ConfigProvider locale={zhCN}>
+    <ConfigProvider theme={theme}>
       <BrowserRouter>
         <Routes>
-          <Route element={<AppLayout />}>
+          <Route element={<MainLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/workflows" element={<WorkflowList />} />
-            <Route path="/workflows/:id" element={<WorkflowEditor />} />
-            <Route path="/executions" element={<ExecutionList />} />
-            <Route path="/executions/:id" element={<ExecutionDetail />} />
+            <Route path="/workflows/:id/executions" element={<ExecutionList />} />
+            <Route path="/executions" element={<AllExecutions />} />
             <Route path="/mcp-servers" element={<MCPServerList />} />
             <Route path="/llm-providers" element={<LLMProviderList />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/agent" element={<AgentPlayground />} />
           </Route>
+          <Route path="/workflows/:id" element={<WorkflowEditor />} />
         </Routes>
       </BrowserRouter>
     </ConfigProvider>
-  );
+  )
 }

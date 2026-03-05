@@ -1,18 +1,16 @@
-import axios from 'axios';
-import { message } from 'antd';
+import axios from 'axios'
 
 const request = axios.create({
   baseURL: '/api/v1',
-  timeout: 60000,
-});
+  timeout: 30000,
+})
 
 request.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const msg = err.response?.data?.error || err.message;
-    message.error(msg);
-    return Promise.reject(err);
+    const msg = err.response?.data?.error || err.message
+    return Promise.reject(new Error(msg))
   }
-);
+)
 
-export default request;
+export default request

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
 )
@@ -56,7 +57,8 @@ func executeLLM(cfg *model.LLMConfig, ctx *WorkflowContext) (any, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	httpClient := &http.Client{Timeout: 120 * time.Second}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("llm request: %w", err)
 	}

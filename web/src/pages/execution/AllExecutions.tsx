@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
 import { Button, Table, Tag, message, Drawer, Descriptions, Timeline, Space, Tooltip, Popconfirm } from 'antd'
 import {
-  ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
@@ -10,8 +8,8 @@ import {
   FileTextOutlined,
   DeleteOutlined,
 } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { executionApi, type Execution, type ExecutionLog } from '../../api/execution'
-import { workflowApi } from '../../api/workflow'
 import AgentStepsView from '../../components/AgentStepsView'
 
 const formatDateTime = (v: string) => {
@@ -37,12 +35,8 @@ const statusTag = (status: string) => {
   )
 }
 
-export default function ExecutionList() {
-  const { id } = useParams()
+export default function AllExecutions() {
   const navigate = useNavigate()
-  const workflowId = id
-
-  const [workflowName, setWorkflowName] = useState('')
   const [executions, setExecutions] = useState<Execution[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -51,11 +45,11 @@ export default function ExecutionList() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [detail, setDetail] = useState<Execution | null>(null)
   const [logs, setLogs] = useState<ExecutionLog[]>([])
+
   const loadExecutions = async (p = 1) => {
-    if (!workflowId) return
     setLoading(true)
     try {
-      const res: any = await executionApi.listByWorkflow(workflowId, p)
+      const res: any = await executionApi.list(p)
       setExecutions(res.data || [])
       setTotal(res.total || 0)
     } catch (err: any) {
@@ -66,13 +60,8 @@ export default function ExecutionList() {
   }
 
   useEffect(() => {
-    if (!workflowId) return
-    workflowApi
-      .get(workflowId)
-      .then((res: any) => setWorkflowName(res.name))
-      .catch(() => {})
     loadExecutions()
-  }, [workflowId])
+  }, [])
 
   const handleDelete = async (execId: string) => {
     try {
@@ -100,6 +89,16 @@ export default function ExecutionList() {
 
   const columns = [
     { title: 'ID', dataIndex: 'id', width: 80 },
+    {
+      title: 'Workflow',
+      dataIndex: 'workflow_id',
+      width: 120,
+      render: (v: string) => (
+        <Button type="link" size="small" onClick={() => navigate(`/workflows/${v}`)}>
+          #{v}
+        </Button>
+      ),
+    },
     {
       title: 'Status',
       dataIndex: 'status',
@@ -162,17 +161,9 @@ export default function ExecutionList() {
   return (
     <div>
       <div className="page-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Button
-            type="text"
-            icon={<ArrowLeftOutlined />}
-            onClick={() => navigate('/workflows')}
-            style={{ color: '#667085' }}
-          />
-          <div>
-            <h2>Executions</h2>
-            <div className="page-header-sub">{workflowName || `Workflow #${workflowId}`}</div>
-          </div>
+        <div>
+          <h2>Executions</h2>
+          <div className="page-header-sub">All workflow execution records</div>
         </div>
       </div>
 
@@ -202,6 +193,11 @@ export default function ExecutionList() {
         {detail && (
           <>
             <Descriptions column={1} size="small" style={{ marginBottom: 24 }}>
+              <Descriptions.Item label="Workflow">
+                <Button type="link" size="small" onClick={() => navigate(`/workflows/${detail.workflow_id}`)}>
+                  Workflow #{detail.workflow_id}
+                </Button>
+              </Descriptions.Item>
               <Descriptions.Item label="Status">{statusTag(detail.status)}</Descriptions.Item>
               <Descriptions.Item label="Started">{formatDateTime(detail.started_at)}</Descriptions.Item>
               <Descriptions.Item label="Finished">{formatDateTime(detail.finished_at)}</Descriptions.Item>

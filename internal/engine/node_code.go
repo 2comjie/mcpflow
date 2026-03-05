@@ -3,6 +3,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/dop251/goja"
@@ -23,6 +24,12 @@ func executeCode(cfg *model.CodeConfig, ctx *WorkflowContext) (any, error) {
 
 func executeJS(code string, ctx *WorkflowContext) (any, error) {
 	vm := goja.New()
+
+	// 执行超时保护（30 秒）
+	timer := time.AfterFunc(30*time.Second, func() {
+		vm.Interrupt("execution timeout (30s)")
+	})
+	defer timer.Stop()
 
 	// 注入上下文变量
 	_ = vm.Set("input", ctx.Input)
