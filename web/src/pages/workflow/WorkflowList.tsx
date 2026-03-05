@@ -45,9 +45,9 @@ export default function WorkflowList() {
     fetchList()
   }, [])
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string | number) => {
     try {
-      await workflowApi.delete(id)
+      await workflowApi.delete(String(id))
       message.success('Deleted')
       fetchList()
     } catch (err: any) {
@@ -55,8 +55,8 @@ export default function WorkflowList() {
     }
   }
 
-  const handleExecute = (id: string) => {
-    setExecuteWorkflowId(id)
+  const handleExecute = (id: string | number) => {
+    setExecuteWorkflowId(String(id))
   }
 
   const handleUseTemplate = async (template: WorkflowTemplate) => {

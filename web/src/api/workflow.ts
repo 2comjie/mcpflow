@@ -1,7 +1,7 @@
 import request from './request'
 
 export interface Workflow {
-  id: string
+  id: number
   name: string
   description: string
   nodes: Node[]
@@ -20,7 +20,20 @@ export interface Node {
   retry?: { max: number; interval: number }
 }
 
+export interface InputDef {
+  name: string
+  type: string // string, number, boolean, text
+  required: boolean
+  description?: string
+  default?: string
+}
+
+export interface StartConfig {
+  input_defs?: InputDef[]
+}
+
 export interface NodeConfig {
+  start?: StartConfig
   llm?: LLMConfig
   agent?: AgentConfig
   condition?: ConditionConfig

@@ -17,7 +17,7 @@ const (
 
 type Execution struct {
 	ID         bson.ObjectID        `json:"id" bson:"_id,omitempty"`
-	WorkflowID bson.ObjectID        `json:"workflow_id" bson:"workflow_id"`
+	WorkflowID int64                `json:"workflow_id" bson:"workflow_id"`
 	Status     ExecStatus           `json:"status" bson:"status"`
 	Input      map[string]any       `json:"input" bson:"input"`
 	Output     map[string]any       `json:"output" bson:"output"`

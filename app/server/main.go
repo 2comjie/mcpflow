@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/2comjie/mcpflow/internal/api"
 	"github.com/2comjie/mcpflow/internal/config"
@@ -29,7 +30,29 @@ func corsMiddleware() gin.HandlerFunc {
 	}
 }
 
+// slogMiddleware 用 slog 记录请求信息
+func slogMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		duration := time.Since(start)
+
+		slog.Info("request",
+			"method", c.Request.Method,
+			"path", c.Request.URL.Path,
+			"status", c.Writer.Status(),
+			"duration", duration.String(),
+			"ip", c.ClientIP(),
+		)
+	}
+}
+
 func main() {
+	// 初始化 slog
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
 	cfgPath := "configs/config.yml"
 	if p := os.Getenv("CONFIG_PATH"); p != "" {
 		cfgPath = p
@@ -37,12 +60,14 @@ func main() {
 
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
-		log.Fatalf("load config: %v", err)
+		slog.Error("load config failed", "error", err)
+		os.Exit(1)
 	}
 
 	client, err := mongo.Connect(options.Client().ApplyURI(cfg.Database.URI))
 	if err != nil {
-		log.Fatalf("connect mongodb: %v", err)
+		slog.Error("connect mongodb failed", "error", err)
+		os.Exit(1)
 	}
 	defer client.Disconnect(context.TODO())
 
@@ -51,13 +76,18 @@ func main() {
 	e := engine.New(s)
 	a := api.New(s, e)
 
-	r := gin.Default()
+	// 使用 gin.New() 代替 gin.Default()，避免默认 logger 和 recovery 的冗余日志
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.New()
+	r.Use(gin.Recovery())
 	r.Use(corsMiddleware())
+	r.Use(slogMiddleware())
 	a.RegisterRoutes(r)
 
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
-	log.Printf("MCPFlow server starting on %s", addr)
+	slog.Info("MCPFlow server starting", "addr", addr)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("server error: %v", err)
+		slog.Error("server error", "error", err)
+		os.Exit(1)
 	}
 }

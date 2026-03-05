@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Button, Input, message, Tooltip, Divider, Form, Select, Tag } from 'antd'
+import { Button, Input, Switch, Space, message, Tooltip, Divider, Form, Select, Tag } from 'antd'
 import {
   SaveOutlined,
   PlayCircleOutlined,
@@ -15,6 +15,8 @@ import {
   MailOutlined,
   SettingOutlined,
   CloseOutlined,
+  PlusOutlined,
+  MinusCircleOutlined,
 } from '@ant-design/icons'
 import {
   ReactFlow,
@@ -284,6 +286,83 @@ export default function WorkflowEditor() {
     } catch {
       message.error('Failed to load provider details')
     }
+  }
+
+  // Start 面板 — 定义输入参数
+  const renderStartPanel = () => {
+    const inputDefs: any[] = (selectedNode?.data as any)?.config?.start?.input_defs || []
+
+    const addInputDef = () => {
+      updateNodeConfig('start.input_defs', [...inputDefs, { name: '', type: 'string', required: false }])
+    }
+    const removeInputDef = (idx: number) => {
+      updateNodeConfig('start.input_defs', inputDefs.filter((_: any, i: number) => i !== idx))
+    }
+    const updateInputDef = (idx: number, field: string, value: any) => {
+      const newDefs = inputDefs.map((d: any, i: number) => i === idx ? { ...d, [field]: value } : d)
+      updateNodeConfig('start.input_defs', newDefs)
+    }
+
+    return (
+      <>
+        <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, borderLeft: '3px solid #12b76a' }}>
+          定义工作流的输入参数，执行时会生成对应的表单。
+        </div>
+        <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13 }}>输入参数</div>
+        {inputDefs.map((def: any, idx: number) => (
+          <div key={idx} style={{ marginBottom: 12, padding: '10px 12px', background: '#f9fafb', borderRadius: 8, border: '1px solid #eaecf0' }}>
+            <Space direction="vertical" style={{ width: '100%' }} size={8}>
+              <Space style={{ width: '100%' }}>
+                <Input
+                  placeholder="参数名"
+                  value={def.name}
+                  onChange={(e) => updateInputDef(idx, 'name', e.target.value)}
+                  style={{ width: 120, borderRadius: 6 }}
+                  size="small"
+                />
+                <Select
+                  value={def.type || 'string'}
+                  onChange={(v) => updateInputDef(idx, 'type', v)}
+                  style={{ width: 100 }}
+                  size="small"
+                  options={[
+                    { value: 'string', label: '文本' },
+                    { value: 'number', label: '数字' },
+                    { value: 'boolean', label: '布尔' },
+                    { value: 'text', label: '长文本' },
+                  ]}
+                />
+                <Switch
+                  size="small"
+                  checked={def.required}
+                  onChange={(v) => updateInputDef(idx, 'required', v)}
+                  checkedChildren="必填"
+                  unCheckedChildren="可选"
+                />
+                <Button type="text" size="small" danger icon={<MinusCircleOutlined />} onClick={() => removeInputDef(idx)} />
+              </Space>
+              <Input
+                placeholder="参数描述（可选）"
+                value={def.description}
+                onChange={(e) => updateInputDef(idx, 'description', e.target.value)}
+                style={{ borderRadius: 6 }}
+                size="small"
+              />
+              <Input
+                placeholder="默认值（可选）"
+                value={def.default}
+                onChange={(e) => updateInputDef(idx, 'default', e.target.value)}
+                style={{ borderRadius: 6 }}
+                size="small"
+              />
+            </Space>
+          </div>
+        ))}
+        <Button type="dashed" onClick={addInputDef} block icon={<PlusOutlined />} style={{ borderRadius: 8 }}>
+          添加输入参数
+        </Button>
+      </>
+    )
   }
 
   // Agent 面板 (LLM + MCP Servers)
@@ -619,6 +698,7 @@ export default function WorkflowEditor() {
 
                 <Divider style={{ margin: '12px 0' }} />
 
+                {(selectedNode.data as any).nodeType === 'start' && renderStartPanel()}
                 {(selectedNode.data as any).nodeType === 'llm' && renderLLMPanel()}
                 {(selectedNode.data as any).nodeType === 'agent' && renderAgentPanel()}
 

@@ -3,12 +3,21 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/2comjie/mcpflow/internal/engine"
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
+
+func parseWorkflowID(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		fail(c, 400, "invalid id")
+		return 0, false
+	}
+	return id, true
+}
 
 func (a *API) CreateWorkflow(c *gin.Context) {
 	var wf model.Workflow
@@ -24,9 +33,8 @@ func (a *API) CreateWorkflow(c *gin.Context) {
 }
 
 func (a *API) GetWorkflow(c *gin.Context) {
-	id, err := bson.ObjectIDFromHex(c.Param("id"))
-	if err != nil {
-		fail(c, 400, "invalid id")
+	id, valid := parseWorkflowID(c)
+	if !valid {
 		return
 	}
 	wf, err := a.store.GetWorkflow(id)
@@ -49,9 +57,8 @@ func (a *API) ListWorkflows(c *gin.Context) {
 }
 
 func (a *API) UpdateWorkflow(c *gin.Context) {
-	id, err := bson.ObjectIDFromHex(c.Param("id"))
-	if err != nil {
-		fail(c, 400, "invalid id")
+	id, valid := parseWorkflowID(c)
+	if !valid {
 		return
 	}
 	var updates map[string]any
@@ -70,9 +77,8 @@ func (a *API) UpdateWorkflow(c *gin.Context) {
 }
 
 func (a *API) DeleteWorkflow(c *gin.Context) {
-	id, err := bson.ObjectIDFromHex(c.Param("id"))
-	if err != nil {
-		fail(c, 400, "invalid id")
+	id, valid := parseWorkflowID(c)
+	if !valid {
 		return
 	}
 	if err := a.store.DeleteWorkflow(id); err != nil {
@@ -83,9 +89,8 @@ func (a *API) DeleteWorkflow(c *gin.Context) {
 }
 
 func (a *API) ExecuteWorkflow(c *gin.Context) {
-	id, err := bson.ObjectIDFromHex(c.Param("id"))
-	if err != nil {
-		fail(c, 400, "invalid id")
+	id, valid := parseWorkflowID(c)
+	if !valid {
 		return
 	}
 	wf, err := a.store.GetWorkflow(id)
@@ -102,7 +107,6 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 
 	exec, err := a.engine.ExecuteWorkflow(wf, input)
 	if err != nil {
-		// 即使失败也返回执行记录（包含错误信息和节点状态）
 		if exec != nil {
 			c.JSON(200, gin.H{"data": exec, "error": err.Error()})
 			return
@@ -115,9 +119,8 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 
 // ExecuteWorkflowStream SSE 流式执行工作流
 func (a *API) ExecuteWorkflowStream(c *gin.Context) {
-	id, err := bson.ObjectIDFromHex(c.Param("id"))
-	if err != nil {
-		c.JSON(400, gin.H{"error": "invalid id"})
+	id, valid := parseWorkflowID(c)
+	if !valid {
 		return
 	}
 	wf, err := a.store.GetWorkflow(id)
@@ -150,7 +153,6 @@ func (a *API) ExecuteWorkflowStream(c *gin.Context) {
 
 	flusher := c.Writer
 
-	// 等一下拿到 execution ID
 	firstEvent := true
 	for evt := range events {
 		if firstEvent && exec != nil {

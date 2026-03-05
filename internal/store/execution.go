@@ -55,7 +55,7 @@ func (s *Store) ListExecutions(page, pageSize int) ([]model.Execution, int64, er
 	return execs, total, nil
 }
 
-func (s *Store) ListExecutionsByWorkflow(workflowID bson.ObjectID, page, pageSize int) ([]model.Execution, int64, error) {
+func (s *Store) ListExecutionsByWorkflow(workflowID int64, page, pageSize int) ([]model.Execution, int64, error) {
 	ctx := context.TODO()
 	filter := bson.M{"workflow_id": workflowID}
 	total, err := s.executions().CountDocuments(ctx, filter)

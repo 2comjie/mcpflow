@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -58,7 +60,7 @@ func (a *API) DeleteExecution(c *gin.Context) {
 }
 
 func (a *API) ListWorkflowExecutions(c *gin.Context) {
-	wfID, err := bson.ObjectIDFromHex(c.Param("id"))
+	wfID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		fail(c, 400, "invalid id")
 		return

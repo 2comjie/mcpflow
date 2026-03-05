@@ -10,18 +10,19 @@ import (
 )
 
 func (s *Store) CreateWorkflow(w *model.Workflow) error {
-	now := time.Now()
-	w.CreatedAt = now
-	w.UpdatedAt = now
-	result, err := s.workflows().InsertOne(context.TODO(), w)
+	id, err := s.NextSeqID("workflows")
 	if err != nil {
 		return err
 	}
-	w.ID = result.InsertedID.(bson.ObjectID)
-	return nil
+	w.ID = id
+	now := time.Now()
+	w.CreatedAt = now
+	w.UpdatedAt = now
+	_, err = s.workflows().InsertOne(context.TODO(), w)
+	return err
 }
 
-func (s *Store) GetWorkflow(id bson.ObjectID) (*model.Workflow, error) {
+func (s *Store) GetWorkflow(id int64) (*model.Workflow, error) {
 	var w model.Workflow
 	err := s.workflows().FindOne(context.TODO(), bson.M{"_id": id}).Decode(&w)
 	if err != nil {
@@ -52,13 +53,13 @@ func (s *Store) ListWorkflows(page, pageSize int) ([]model.Workflow, int64, erro
 	return workflows, total, nil
 }
 
-func (s *Store) UpdateWorkflow(id bson.ObjectID, updates map[string]any) error {
+func (s *Store) UpdateWorkflow(id int64, updates map[string]any) error {
 	updates["updated_at"] = time.Now()
 	_, err := s.workflows().UpdateByID(context.TODO(), id, bson.M{"$set": updates})
 	return err
 }
 
-func (s *Store) DeleteWorkflow(id bson.ObjectID) error {
+func (s *Store) DeleteWorkflow(id int64) error {
 	_, err := s.workflows().DeleteOne(context.TODO(), bson.M{"_id": id})
 	return err
 }

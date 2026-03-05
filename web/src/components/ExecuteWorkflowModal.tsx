@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Modal, Input, Radio, message, Tag } from 'antd'
+import { Modal, Input, InputNumber, Switch, Radio, message, Tag } from 'antd'
 import {
   LoadingOutlined,
   CheckCircleOutlined,
@@ -7,10 +7,18 @@ import {
 } from '@ant-design/icons'
 import { workflowApi } from '../api/workflow'
 
+interface InputDef {
+  name: string
+  type: string
+  required: boolean
+  description?: string
+  default?: string
+}
+
 interface Props {
   open: boolean
   workflowId: string | null
-  nodes?: any[] // 如果已有节点数据可直接传入，省去一次请求
+  nodes?: any[]
   onClose: () => void
   onSuccess?: (executionId: string) => void
 }
@@ -24,28 +32,34 @@ interface NodeEventData {
   duration?: number
 }
 
-/** 从节点配置中提取 {{.input.xxx}} 和 {{.xxx}} 变量名 */
-export function extractInputVars(nodes: any[]): string[] {
+/** 从 Start 节点的 config.start.input_defs 提取输入定义 */
+function extractInputDefs(nodes: any[]): InputDef[] {
+  const startNode = (nodes || []).find(
+    (n: any) => n.type === 'start' || (n.data?.nodeType) === 'start',
+  )
+  if (!startNode) return []
+  const config = startNode.config || startNode.data?.config || {}
+  return config.start?.input_defs || []
+}
+
+/** 从节点配置模板中提取 {{input.xxx}} 变量名（fallback） */
+function extractTemplateVars(nodes: any[]): string[] {
   const vars = new Set<string>()
   const configStr = JSON.stringify((nodes || []).map((n: any) => n.config || (n.data?.config) || {}))
-  const re = /\{\{\s*\.(?:input\.)?(\w+)\s*\}\}/g
+  const re = /\{\{input\.(\w+)\}\}/g
   let m
   while ((m = re.exec(configStr)) !== null) {
-    const name = m[1]
-    if (!name.startsWith('node_') && name !== 'input') {
-      vars.add(name)
-    }
+    vars.add(m[1])
   }
   return Array.from(vars)
 }
 
 export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNodes, onClose, onSuccess }: Props) {
-  const [inputVars, setInputVars] = useState<string[]>([])
-  const [formValues, setFormValues] = useState<Record<string, string>>({})
+  const [inputDefs, setInputDefs] = useState<InputDef[]>([])
+  const [formValues, setFormValues] = useState<Record<string, any>>({})
   const [jsonInput, setJsonInput] = useState('{}')
   const [mode, setMode] = useState<'form' | 'json'>('form')
   const [loading, setLoading] = useState(false)
-  const [_fetching, setFetching] = useState(false)
 
   // SSE streaming state
   const [streaming, setStreaming] = useState(false)
@@ -58,25 +72,39 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
   useEffect(() => {
     if (!open || !workflowId) return
 
+    const processNodes = (nodes: any[]) => {
+      // 优先用 Start 节点的 input_defs
+      let defs = extractInputDefs(nodes)
+      if (defs.length === 0) {
+        // fallback: 从模板变量提取
+        const vars = extractTemplateVars(nodes)
+        defs = vars.map((name) => ({ name, type: 'string', required: false }))
+      }
+      setInputDefs(defs)
+      setMode(defs.length > 0 ? 'form' : 'json')
+      // 设置默认值
+      const defaults: Record<string, any> = {}
+      for (const def of defs) {
+        if (def.default) {
+          defaults[def.name] = def.type === 'number' ? Number(def.default) :
+            def.type === 'boolean' ? def.default === 'true' : def.default
+        }
+      }
+      setFormValues(defaults)
+    }
+
     if (propNodes) {
-      const vars = extractInputVars(propNodes)
-      setInputVars(vars)
-      setMode(vars.length > 0 ? 'form' : 'json')
+      processNodes(propNodes)
     } else {
-      setFetching(true)
       workflowApi
         .get(workflowId)
         .then((res: any) => {
           const wf = res.data || res
-          const vars = extractInputVars(wf.nodes || [])
-          setInputVars(vars)
-          setMode(vars.length > 0 ? 'form' : 'json')
+          processNodes(wf.nodes || [])
         })
         .catch((err: any) => message.error(err.message))
-        .finally(() => setFetching(false))
     }
 
-    setFormValues({})
     setJsonInput('{}')
     setStreaming(false)
     setNodeEvents([])
@@ -96,10 +124,19 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
         return
       }
     } else {
-      input = { ...formValues }
+      // 按类型转换
+      for (const def of inputDefs) {
+        const val = formValues[def.name]
+        if (def.required && (val === undefined || val === '')) {
+          message.warning(`请填写必填参数: ${def.name}`)
+          return
+        }
+        if (val !== undefined && val !== '') {
+          input[def.name] = val
+        }
+      }
     }
 
-    // Use SSE streaming
     setStreaming(true)
     setNodeEvents([])
     setExecutionId(null)
@@ -147,7 +184,6 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
                 setExecutionId(data.execution_id)
               } else if (currentEvent === 'node_event') {
                 setNodeEvents((prev) => {
-                  // Update existing node or add new
                   const existing = prev.findIndex((e) => e.node_id === data.node_id && e.status === 'running')
                   if (existing >= 0 && data.status !== 'running') {
                     const updated = [...prev]
@@ -193,55 +229,101 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
     return null
   }
 
+  const renderFormField = (def: InputDef) => {
+    const label = (
+      <span>
+        {def.name}
+        {def.required && <span style={{ color: '#f04438', marginLeft: 2 }}>*</span>}
+        {def.description && <span style={{ color: '#98a2b3', fontWeight: 400, marginLeft: 6 }}>{def.description}</span>}
+      </span>
+    )
+
+    switch (def.type) {
+      case 'number':
+        return (
+          <div key={def.name} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#344054' }}>{label}</div>
+            <InputNumber
+              value={formValues[def.name]}
+              onChange={(v) => setFormValues((prev) => ({ ...prev, [def.name]: v }))}
+              placeholder={def.default || `输入 ${def.name}`}
+              style={{ width: '100%', borderRadius: 8 }}
+            />
+          </div>
+        )
+      case 'boolean':
+        return (
+          <div key={def.name} style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#344054', flex: 1 }}>{label}</div>
+            <Switch
+              checked={!!formValues[def.name]}
+              onChange={(v) => setFormValues((prev) => ({ ...prev, [def.name]: v }))}
+            />
+          </div>
+        )
+      case 'text':
+        return (
+          <div key={def.name} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#344054' }}>{label}</div>
+            <Input.TextArea
+              value={formValues[def.name] || ''}
+              onChange={(e) => setFormValues((prev) => ({ ...prev, [def.name]: e.target.value }))}
+              placeholder={def.default || `输入 ${def.name}`}
+              rows={4}
+              style={{ borderRadius: 8 }}
+            />
+          </div>
+        )
+      default: // string
+        return (
+          <div key={def.name} style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#344054' }}>{label}</div>
+            <Input
+              value={formValues[def.name] || ''}
+              onChange={(e) => setFormValues((prev) => ({ ...prev, [def.name]: e.target.value }))}
+              placeholder={def.default || `输入 ${def.name}`}
+              style={{ borderRadius: 8 }}
+            />
+          </div>
+        )
+    }
+  }
+
   return (
     <Modal
-      title="Execute Workflow"
+      title="执行工作流"
       open={open}
       onCancel={handleClose}
       onOk={streaming ? handleClose : handleExecute}
-      okText={streaming ? (streamDone ? 'Close' : 'Running...') : 'Execute'}
+      okText={streaming ? (streamDone ? '关闭' : '执行中...') : '执行'}
       confirmLoading={loading && !streaming}
       okButtonProps={streaming && !streamDone ? { disabled: true } : undefined}
     >
       {!streaming ? (
         <>
-          {inputVars.length > 0 && (
+          {inputDefs.length > 0 && (
             <Radio.Group
               value={mode}
               onChange={(e) => setMode(e.target.value)}
               size="small"
               style={{ marginBottom: 12 }}
             >
-              <Radio.Button value="form">Form</Radio.Button>
+              <Radio.Button value="form">表单</Radio.Button>
               <Radio.Button value="json">JSON</Radio.Button>
             </Radio.Group>
           )}
 
-          {mode === 'form' && inputVars.length > 0 ? (
+          {mode === 'form' && inputDefs.length > 0 ? (
             <div>
               <div style={{ marginBottom: 8, color: '#667085', fontSize: 12 }}>
-                Detected {inputVars.length} input variable{inputVars.length > 1 ? 's' : ''}:
+                {inputDefs.length} 个输入参数
               </div>
-              {inputVars.map((varName) => (
-                <div key={varName} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#344054' }}>
-                    {varName}
-                  </div>
-                  <Input
-                    value={formValues[varName] || ''}
-                    onChange={(e) =>
-                      setFormValues((prev) => ({ ...prev, [varName]: e.target.value }))
-                    }
-                    placeholder={`Enter ${varName}...`}
-                    style={{ borderRadius: 8 }}
-                  />
-                </div>
-              ))}
+              {inputDefs.map((def) => renderFormField(def))}
             </div>
           ) : (
             <>
               <div style={{ marginBottom: 8, color: '#667085', fontSize: 13 }}>
-                Input parameters (JSON):
+                输入参数 (JSON):
               </div>
               <Input.TextArea
                 value={jsonInput}
@@ -257,7 +339,7 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
         <div>
           {executionId && (
             <div style={{ marginBottom: 12, fontSize: 12, color: '#98a2b3' }}>
-              Execution #{executionId}
+              执行记录 #{executionId}
             </div>
           )}
 
@@ -310,7 +392,7 @@ export default function ExecuteWorkflowModal({ open, workflowId, nodes: propNode
 
           {streamDone && !streamError && (
             <div style={{ marginTop: 12, padding: 8, background: '#f0fdf4', borderRadius: 8, fontSize: 12, color: '#12b76a' }}>
-              Execution completed successfully
+              执行完成
             </div>
           )}
         </div>

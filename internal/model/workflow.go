@@ -2,8 +2,6 @@ package model
 
 import (
 	"time"
-
-	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type NodeType string
@@ -20,13 +18,13 @@ const (
 )
 
 type Workflow struct {
-	ID          bson.ObjectID `json:"id" bson:"_id,omitempty"`
-	Name        string        `json:"name" bson:"name"`
-	Description string        `json:"description" bson:"description"`
-	Nodes       []Node        `json:"nodes" bson:"nodes"`
-	Edges       []Edge        `json:"edges" bson:"edges"`
-	CreatedAt   time.Time     `json:"created_at" bson:"created_at"`
-	UpdatedAt   time.Time     `json:"updated_at" bson:"updated_at"`
+	ID          int64     `json:"id" bson:"_id"`
+	Name        string    `json:"name" bson:"name"`
+	Description string    `json:"description" bson:"description"`
+	Nodes       []Node    `json:"nodes" bson:"nodes"`
+	Edges       []Edge    `json:"edges" bson:"edges"`
+	CreatedAt   time.Time `json:"created_at" bson:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at" bson:"updated_at"`
 }
 
 type Node struct {
@@ -50,12 +48,27 @@ type Position struct {
 }
 
 type NodeConfig struct {
+	Start     *StartConfig     `json:"start,omitempty" bson:"start,omitempty"`
 	LLM       *LLMConfig       `json:"llm,omitempty" bson:"llm,omitempty"`
 	Agent     *AgentConfig     `json:"agent,omitempty" bson:"agent,omitempty"`
 	Condition *ConditionConfig `json:"condition,omitempty" bson:"condition,omitempty"`
 	Code      *CodeConfig      `json:"code,omitempty" bson:"code,omitempty"`
 	HTTP      *HTTPConfig      `json:"http,omitempty" bson:"http,omitempty"`
 	Email     *EmailConfig     `json:"email,omitempty" bson:"email,omitempty"`
+}
+
+// StartConfig Start 节点配置，定义工作流输入参数
+type StartConfig struct {
+	InputDefs []InputDef `json:"input_defs,omitempty" bson:"input_defs,omitempty"`
+}
+
+// InputDef 输入参数定义
+type InputDef struct {
+	Name        string `json:"name" bson:"name"`
+	Type        string `json:"type" bson:"type"` // string, number, boolean, text
+	Required    bool   `json:"required" bson:"required"`
+	Description string `json:"description,omitempty" bson:"description,omitempty"`
+	Default     string `json:"default,omitempty" bson:"default,omitempty"`
 }
 
 type LLMConfig struct {
