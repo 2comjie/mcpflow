@@ -50,6 +50,9 @@ func (s *Store) ListWorkflows(page, pageSize int) ([]model.Workflow, int64, erro
 	if err := cursor.All(ctx, &workflows); err != nil {
 		return nil, 0, err
 	}
+	if workflows == nil {
+		workflows = []model.Workflow{}
+	}
 	return workflows, total, nil
 }
 

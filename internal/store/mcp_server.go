@@ -46,6 +46,9 @@ func (s *Store) ListMCPServers() ([]model.MCPServer, error) {
 	if err := cursor.All(ctx, &servers); err != nil {
 		return nil, err
 	}
+	if servers == nil {
+		servers = []model.MCPServer{}
+	}
 	return servers, nil
 }
 

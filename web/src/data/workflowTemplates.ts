@@ -235,6 +235,45 @@ export const workflowTemplates: WorkflowTemplate[] = [
     ],
   },
 
+  {
+    id: 'agent-deepwiki',
+    name: 'Agent + DeepWiki (Public MCP)',
+    description: 'Agent uses DeepWiki MCP to query GitHub repo documentation and answer questions',
+    category: 'agent',
+    nodes: [
+      {
+        id: 'node_1', type: 'start', name: 'Start',
+        config: {
+          start: {
+            input_defs: [
+              { name: 'repo', type: 'string', required: true, description: 'GitHub repo (owner/repo)', default: 'facebook/react' },
+              { name: 'question', type: 'text', required: true, description: 'Question about the repo', default: 'What are the main features?' },
+            ],
+          },
+        },
+        position: { x: 300, y: 50 },
+      },
+      {
+        id: 'node_2', type: 'agent', name: 'DeepWiki Agent',
+        config: {
+          agent: {
+            base_url: '', api_key: '', model: '',
+            prompt: 'Answer the following question about the GitHub repository {{input.repo}}:\n\n{{input.question}}',
+            system_msg: 'You are a code research assistant. Use the available MCP tools to read documentation and answer questions about GitHub repositories. Always use tools to get accurate information.',
+            mcp_servers: [{ url: 'https://mcp.deepwiki.com/mcp' }],
+            max_iterations: 5, temperature: 0.3, max_tokens: 2048,
+          },
+        },
+        position: { x: 300, y: 220 },
+      },
+      { id: 'node_3', type: 'end', name: 'End', config: {}, position: { x: 300, y: 390 } },
+    ],
+    edges: [
+      { id: 'e1-2', source: 'node_1', target: 'node_2' },
+      { id: 'e2-3', source: 'node_2', target: 'node_3' },
+    ],
+  },
+
   // ==================== Advanced ====================
   {
     id: 'conditional-branch',

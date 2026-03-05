@@ -6,7 +6,6 @@ import (
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
-	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -94,10 +93,7 @@ func (a *API) CheckMCPServer(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	mcpClient, err := client.NewSSEMCPClient(srv.URL, client.WithHeaders(srv.Headers))
+	mcpClient, err := connectMCPServer(srv.URL, srv.Headers)
 	if err != nil {
 		updateServerStatus(a, id, "error")
 		fail(c, 500, "connect failed: "+err.Error())
@@ -105,20 +101,8 @@ func (a *API) CheckMCPServer(c *gin.Context) {
 	}
 	defer mcpClient.Close()
 
-	if err := mcpClient.Start(ctx); err != nil {
-		updateServerStatus(a, id, "error")
-		fail(c, 500, "start failed: "+err.Error())
-		return
-	}
-
-	initReq := mcp.InitializeRequest{}
-	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow", Version: "1.0"}
-	if _, err := mcpClient.Initialize(ctx, initReq); err != nil {
-		updateServerStatus(a, id, "error")
-		fail(c, 500, "init failed: "+err.Error())
-		return
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	// 获取工具列表
 	var tools any
@@ -182,28 +166,15 @@ func (a *API) CallMCPTool(c *gin.Context) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	mcpClient, err := client.NewSSEMCPClient(srv.URL, client.WithHeaders(srv.Headers))
+	mcpClient, err := connectMCPServer(srv.URL, srv.Headers)
 	if err != nil {
 		fail(c, 500, "connect failed: "+err.Error())
 		return
 	}
 	defer mcpClient.Close()
 
-	if err := mcpClient.Start(ctx); err != nil {
-		fail(c, 500, "start failed: "+err.Error())
-		return
-	}
-
-	initReq := mcp.InitializeRequest{}
-	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow", Version: "1.0"}
-	if _, err := mcpClient.Initialize(ctx, initReq); err != nil {
-		fail(c, 500, "init failed: "+err.Error())
-		return
-	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	callReq := mcp.CallToolRequest{}
 	callReq.Params.Name = req.ToolName

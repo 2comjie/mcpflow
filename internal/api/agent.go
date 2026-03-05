@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
@@ -254,6 +257,55 @@ func (a *API) AgentChat(c *gin.Context) {
 	fail(c, 500, fmt.Sprintf("agent exceeded max iterations (%d)", maxIter))
 }
 
+// connectMCPServer connects to an MCP server, trying Streamable HTTP first, then falling back to SSE.
+func connectMCPServer(url string, headers map[string]string) (*client.Client, error) {
+	ctx := context.Background()
+
+	// Try Streamable HTTP first (modern protocol)
+	var httpOpts []transport.StreamableHTTPCOption
+	if len(headers) > 0 {
+		httpOpts = append(httpOpts, transport.WithHTTPHeaders(headers))
+	}
+	c, err := client.NewStreamableHttpClient(url, httpOpts...)
+	if err == nil {
+		if startErr := c.Start(ctx); startErr == nil {
+			initReq := mcp.InitializeRequest{}
+			initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+			initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow-agent", Version: "1.0"}
+			if _, initErr := c.Initialize(ctx, initReq); initErr == nil {
+				slog.Info("connected to MCP server via Streamable HTTP", "url", url)
+				return c, nil
+			}
+			_ = c.Close()
+		} else {
+			_ = c.Close()
+		}
+	}
+
+	// Fallback to SSE transport
+	sseURL := url
+	if !strings.HasSuffix(sseURL, "/sse") {
+		sseURL = strings.TrimRight(sseURL, "/") + "/sse"
+	}
+	c, err = client.NewSSEMCPClient(sseURL, client.WithHeaders(headers))
+	if err != nil {
+		return nil, fmt.Errorf("connect mcp %s: %w", url, err)
+	}
+	if err := c.Start(ctx); err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("start mcp %s: %w", url, err)
+	}
+	initReq := mcp.InitializeRequest{}
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow-agent", Version: "1.0"}
+	if _, err := c.Initialize(ctx, initReq); err != nil {
+		_ = c.Close()
+		return nil, fmt.Errorf("init mcp %s: %w", url, err)
+	}
+	slog.Info("connected to MCP server via SSE", "url", sseURL)
+	return c, nil
+}
+
 func collectAgentMCPTools(servers []model.AgentMCPServer) ([]map[string]any, map[string]*client.Client, error) {
 	var allTools []map[string]any
 	clients := make(map[string]*client.Client)
@@ -265,21 +317,10 @@ func collectAgentMCPTools(servers []model.AgentMCPServer) ([]map[string]any, map
 	}
 
 	for _, srv := range servers {
-		c, err := client.NewSSEMCPClient(srv.URL, client.WithHeaders(srv.Headers))
+		c, err := connectMCPServer(srv.URL, srv.Headers)
 		if err != nil {
 			cleanup()
-			return nil, nil, fmt.Errorf("connect mcp %s: %w", srv.URL, err)
-		}
-		if err := c.Start(context.Background()); err != nil {
-			cleanup()
-			return nil, nil, fmt.Errorf("start mcp %s: %w", srv.URL, err)
-		}
-		initReq := mcp.InitializeRequest{}
-		initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-		initReq.Params.ClientInfo = mcp.Implementation{Name: "mcpflow-agent", Version: "1.0"}
-		if _, err := c.Initialize(context.Background(), initReq); err != nil {
-			cleanup()
-			return nil, nil, fmt.Errorf("init mcp %s: %w", srv.URL, err)
+			return nil, nil, err
 		}
 		toolsResult, err := c.ListTools(context.Background(), mcp.ListToolsRequest{})
 		if err != nil {

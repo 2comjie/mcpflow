@@ -35,8 +35,14 @@ export default function AgentPlayground() {
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    llmProviderApi.list().then((res: any) => setProviders(res.data || res || []))
-    mcpServerApi.list().then((res: any) => setMcpServers(res.data || res || []))
+    llmProviderApi.list().then((res: any) => {
+      const data = res?.data ?? res
+      setProviders(Array.isArray(data) ? data : [])
+    })
+    mcpServerApi.list().then((res: any) => {
+      const data = res?.data ?? res
+      setMcpServers(Array.isArray(data) ? data : [])
+    })
   }, [])
 
   useEffect(() => {

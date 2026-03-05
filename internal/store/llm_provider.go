@@ -43,6 +43,9 @@ func (s *Store) ListLLMProviders() ([]model.LLMProvider, error) {
 	if err := cursor.All(ctx, &providers); err != nil {
 		return nil, err
 	}
+	if providers == nil {
+		providers = []model.LLMProvider{}
+	}
 	return providers, nil
 }
 

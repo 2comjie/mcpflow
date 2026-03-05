@@ -52,6 +52,9 @@ func (s *Store) ListExecutions(page, pageSize int) ([]model.Execution, int64, er
 	if err := cursor.All(ctx, &execs); err != nil {
 		return nil, 0, err
 	}
+	if execs == nil {
+		execs = []model.Execution{}
+	}
 	return execs, total, nil
 }
 
@@ -74,6 +77,9 @@ func (s *Store) ListExecutionsByWorkflow(workflowID int64, page, pageSize int) (
 	var execs []model.Execution
 	if err := cursor.All(ctx, &execs); err != nil {
 		return nil, 0, err
+	}
+	if execs == nil {
+		execs = []model.Execution{}
 	}
 	return execs, total, nil
 }
@@ -112,6 +118,9 @@ func (s *Store) GetExecutionLogs(executionID bson.ObjectID) ([]model.ExecutionLo
 	var logs []model.ExecutionLog
 	if err := cursor.All(ctx, &logs); err != nil {
 		return nil, err
+	}
+	if logs == nil {
+		logs = []model.ExecutionLog{}
 	}
 	return logs, nil
 }
