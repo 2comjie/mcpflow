@@ -17,16 +17,8 @@ type ServerConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string `yaml:"host"`
-	Port     string `yaml:"port"`
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Name     string `yaml:"name"`
-}
-
-func (d *DatabaseConfig) DSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		d.User, d.Password, d.Host, d.Port, d.Name)
+	URI  string `yaml:"uri"`
+	Name string `yaml:"name"`
 }
 
 func Load(path string) (*Config, error) {
@@ -40,6 +32,12 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Server.Port == "" {
 		cfg.Server.Port = "8080"
+	}
+	if cfg.Database.URI == "" {
+		cfg.Database.URI = "mongodb://127.0.0.1:27017"
+	}
+	if cfg.Database.Name == "" {
+		cfg.Database.Name = "mcpflow"
 	}
 	return &cfg, nil
 }

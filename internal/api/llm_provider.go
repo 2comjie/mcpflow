@@ -2,10 +2,10 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func (a *API) CreateLLMProvider(c *gin.Context) {
@@ -22,12 +22,12 @@ func (a *API) CreateLLMProvider(c *gin.Context) {
 }
 
 func (a *API) GetLLMProvider(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	p, err := a.store.GetLLMProvider(uint(id))
+	p, err := a.store.GetLLMProvider(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "provider not found"})
 		return
@@ -41,7 +41,6 @@ func (a *API) ListLLMProviders(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	// API Key 脱敏
 	for i := range list {
 		list[i].APIKey = maskAPIKey(list[i].APIKey)
 	}
@@ -49,7 +48,7 @@ func (a *API) ListLLMProviders(c *gin.Context) {
 }
 
 func (a *API) UpdateLLMProvider(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -59,7 +58,7 @@ func (a *API) UpdateLLMProvider(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := a.store.UpdateLLMProvider(uint(id), updates); err != nil {
+	if err := a.store.UpdateLLMProvider(id, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -67,19 +66,18 @@ func (a *API) UpdateLLMProvider(c *gin.Context) {
 }
 
 func (a *API) DeleteLLMProvider(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := a.store.DeleteLLMProvider(uint(id)); err != nil {
+	if err := a.store.DeleteLLMProvider(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
-// maskAPIKey 脱敏 API Key：显示前4后4字符
 func maskAPIKey(key string) string {
 	if len(key) <= 8 {
 		return "****"

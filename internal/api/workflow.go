@@ -12,6 +12,7 @@ import (
 	"github.com/2comjie/mcpflow/internal/engine"
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func (a *API) CreateWorkflow(c *gin.Context) {
@@ -28,12 +29,12 @@ func (a *API) CreateWorkflow(c *gin.Context) {
 }
 
 func (a *API) GetWorkflow(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	wf, err := a.store.GetWorkflow(uint(id))
+	wf, err := a.store.GetWorkflow(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "workflow not found"})
 		return
@@ -53,7 +54,7 @@ func (a *API) ListWorkflows(c *gin.Context) {
 }
 
 func (a *API) UpdateWorkflow(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -63,7 +64,7 @@ func (a *API) UpdateWorkflow(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := a.store.UpdateWorkflow(uint(id), updates); err != nil {
+	if err := a.store.UpdateWorkflow(id, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -71,12 +72,12 @@ func (a *API) UpdateWorkflow(c *gin.Context) {
 }
 
 func (a *API) DeleteWorkflow(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := a.store.DeleteWorkflow(uint(id)); err != nil {
+	if err := a.store.DeleteWorkflow(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -84,13 +85,13 @@ func (a *API) DeleteWorkflow(c *gin.Context) {
 }
 
 func (a *API) ExecuteWorkflow(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	wf, err := a.store.GetWorkflow(uint(id))
+	wf, err := a.store.GetWorkflow(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "workflow not found"})
 		return
@@ -101,7 +102,6 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 		input = map[string]any{}
 	}
 
-	// 创建执行记录
 	now := time.Now()
 	exec := &model.Execution{
 		WorkflowID: wf.ID,
@@ -114,10 +114,9 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 		return
 	}
 
-	// 后台执行
 	go func() {
 		if err := a.store.UpdateExecution(exec.ID, map[string]any{"status": model.ExecRunning}); err != nil {
-			log.Printf("update execution %d to running failed: %v", exec.ID, err)
+			log.Printf("update execution %s to running failed: %v", exec.ID.Hex(), err)
 		}
 
 		logFn := func(el *model.ExecutionLog) {
@@ -127,7 +126,6 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 			}
 		}
 
-		// 使用独立 context，避免 HTTP 请求结束后 context 被取消
 		ctx := context.Background()
 		result, err := a.engine.Run(ctx, wf, input, logFn)
 
@@ -144,7 +142,7 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 		}
 
 		if err := a.store.UpdateExecution(exec.ID, updates); err != nil {
-			log.Printf("update execution %d failed: %v", exec.ID, err)
+			log.Printf("update execution %s failed: %v", exec.ID.Hex(), err)
 		}
 	}()
 
@@ -152,14 +150,14 @@ func (a *API) ExecuteWorkflow(c *gin.Context) {
 }
 
 func (a *API) ListWorkflowExecutions(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	size, _ := strconv.Atoi(c.DefaultQuery("size", "20"))
-	list, total, err := a.store.ListExecutions(uint(id), page, size)
+	list, total, err := a.store.ListExecutions(id, page, size)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -167,15 +165,14 @@ func (a *API) ListWorkflowExecutions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
 }
 
-// ExecuteWorkflowSSE 流式执行工作流，通过 SSE 推送节点事件
 func (a *API) ExecuteWorkflowSSE(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	wf, err := a.store.GetWorkflow(uint(id))
+	wf, err := a.store.GetWorkflow(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "workflow not found"})
 		return
@@ -186,7 +183,6 @@ func (a *API) ExecuteWorkflowSSE(c *gin.Context) {
 		input = map[string]any{}
 	}
 
-	// 创建执行记录
 	now := time.Now()
 	exec := &model.Execution{
 		WorkflowID: wf.ID,
@@ -199,13 +195,11 @@ func (a *API) ExecuteWorkflowSSE(c *gin.Context) {
 		return
 	}
 
-	// SSE headers
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Flush()
 
-	// 发送 execution_id 事件
 	sendSSE(c, "execution_id", map[string]any{"execution_id": exec.ID})
 
 	a.store.UpdateExecution(exec.ID, map[string]any{"status": model.ExecRunning})
@@ -240,7 +234,6 @@ func (a *API) ExecuteWorkflowSSE(c *gin.Context) {
 
 	a.store.UpdateExecution(exec.ID, updates)
 
-	// 发送 done 事件关闭流
 	sendSSE(c, "done", map[string]any{"execution_id": exec.ID})
 }
 

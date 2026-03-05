@@ -2,22 +2,22 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 
 	"github.com/2comjie/mcpflow/internal/engine"
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 type AgentChatRequest struct {
-	LLMProviderID uint   `json:"llm_provider_id" binding:"required"`
-	MCPServerIDs  []uint `json:"mcp_server_ids" binding:"required"`
-	Message       string `json:"message" binding:"required"`
-	SystemMsg     string `json:"system_msg"`
-	MaxIterations int    `json:"max_iterations"`
-	Temperature   float64 `json:"temperature"`
-	MaxTokens     int    `json:"max_tokens"`
+	LLMProviderID string   `json:"llm_provider_id" binding:"required"`
+	MCPServerIDs  []string `json:"mcp_server_ids" binding:"required"`
+	Message       string   `json:"message" binding:"required"`
+	SystemMsg     string   `json:"system_msg"`
+	MaxIterations int      `json:"max_iterations"`
+	Temperature   float64  `json:"temperature"`
+	MaxTokens     int      `json:"max_tokens"`
 }
 
 func (a *API) AgentChat(c *gin.Context) {
@@ -27,19 +27,27 @@ func (a *API) AgentChat(c *gin.Context) {
 		return
 	}
 
-	// 获取 LLM Provider
-	provider, err := a.store.GetLLMProvider(req.LLMProviderID)
+	providerID, err := bson.ObjectIDFromHex(req.LLMProviderID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid llm_provider_id"})
+		return
+	}
+	provider, err := a.store.GetLLMProvider(providerID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "llm provider not found"})
 		return
 	}
 
-	// 获取 MCP Servers
 	var mcpServers []model.AgentMCPServer
-	for _, id := range req.MCPServerIDs {
-		srv, err := a.store.GetMCPServer(id)
+	for _, idStr := range req.MCPServerIDs {
+		srvID, err := bson.ObjectIDFromHex(idStr)
 		if err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "mcp server not found: " + err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid mcp_server_id: " + idStr})
+			return
+		}
+		srv, err := a.store.GetMCPServer(srvID)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "mcp server not found: " + idStr})
 			return
 		}
 		mcpServers = append(mcpServers, model.AgentMCPServer{
@@ -48,16 +56,11 @@ func (a *API) AgentChat(c *gin.Context) {
 		})
 	}
 
-	// 解析模型列表，取第一个可用模型
 	modelName := ""
 	if len(provider.Models) > 0 {
-		var models []string
-		if err := json.Unmarshal(provider.Models, &models); err == nil && len(models) > 0 {
-			modelName = models[0]
-		}
+		modelName = provider.Models[0]
 	}
 
-	// 构建 Agent 配置
 	agentCfg := &model.AgentConfig{
 		BaseURL:       provider.BaseURL,
 		APIKey:        provider.APIKey,
@@ -86,7 +89,6 @@ func (a *API) AgentChat(c *gin.Context) {
 		},
 	}
 
-	// 执行 Agent
 	executor := engine.NewAgentExecutor(a.mcp)
 	result, err := executor.Execute(context.Background(), node, map[string]any{})
 	if err != nil {

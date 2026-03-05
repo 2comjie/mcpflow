@@ -37,7 +37,7 @@ func NewEngine(registry *ExecutorRegistry) *Engine {
 // RunResult 执行结果
 type RunResult struct {
 	Output     map[string]any
-	NodeStates model.NodeStates
+	NodeStates map[string]model.NodeState
 }
 
 // Run 执行工作流
@@ -59,7 +59,7 @@ func (e *Engine) RunWithEvents(ctx context.Context, wf *model.Workflow, input ma
 
 	// 节点输出缓存：nodeID -> output
 	outputs := make(map[string]map[string]any)
-	nodeStates := make(model.NodeStates)
+	nodeStates := make(map[string]model.NodeState)
 
 	// 模板渲染数据：input 字段保留完整引用，同时平铺到顶层方便使用
 	templateData := map[string]any{
@@ -100,7 +100,7 @@ func (e *Engine) executeNode(
 	node *model.Node,
 	input map[string]any,
 	outputs map[string]map[string]any,
-	nodeStates model.NodeStates,
+	nodeStates map[string]model.NodeState,
 	templateData map[string]any,
 	logFn LogFunc,
 	eventFn EventFunc,
@@ -193,7 +193,7 @@ func (e *Engine) emitEvent(eventFn EventFunc, node *model.Node, status string, o
 	})
 }
 
-func (e *Engine) recordState(states model.NodeStates, node *model.Node, status string, input, output map[string]any, errMsg string, duration int64) {
+func (e *Engine) recordState(states map[string]model.NodeState, node *model.Node, status string, input, output map[string]any, errMsg string, duration int64) {
 	states[node.ID] = model.NodeState{
 		NodeID:   node.ID,
 		Status:   status,

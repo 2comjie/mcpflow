@@ -1,46 +1,74 @@
 package store
 
 import (
+	"context"
+	"time"
+
 	"github.com/2comjie/mcpflow/internal/model"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func (s *Store) CreateWorkflow(w *model.Workflow) error {
-	return s.db.Create(w).Error
+	now := time.Now()
+	w.CreatedAt = now
+	w.UpdatedAt = now
+	result, err := s.workflows().InsertOne(context.TODO(), w)
+	if err != nil {
+		return err
+	}
+	w.ID = result.InsertedID.(bson.ObjectID)
+	return nil
 }
 
-func (s *Store) GetWorkflow(id uint) (*model.Workflow, error) {
+func (s *Store) GetWorkflow(id bson.ObjectID) (*model.Workflow, error) {
 	var w model.Workflow
-	if err := s.db.First(&w, id).Error; err != nil {
+	err := s.workflows().FindOne(context.TODO(), bson.M{"_id": id}).Decode(&w)
+	if err != nil {
 		return nil, err
 	}
 	return &w, nil
 }
 
 func (s *Store) ListWorkflows(page, pageSize int) ([]model.Workflow, int64, error) {
-	var workflows []model.Workflow
-	var total int64
-
-	db := s.db.Model(&model.Workflow{})
-	if err := db.Count(&total).Error; err != nil {
+	ctx := context.TODO()
+	total, err := s.workflows().CountDocuments(ctx, bson.M{})
+	if err != nil {
 		return nil, 0, err
 	}
 
-	offset := (page - 1) * pageSize
-	if err := db.Order("id DESC").Offset(offset).Limit(pageSize).Find(&workflows).Error; err != nil {
+	skip := int64((page - 1) * pageSize)
+	limit := int64(pageSize)
+	opts := options.Find().SetSort(bson.M{"_id": -1}).SetSkip(skip).SetLimit(limit)
+
+	cursor, err := s.workflows().Find(ctx, bson.M{}, opts)
+	if err != nil {
 		return nil, 0, err
+	}
+
+	var workflows []model.Workflow
+	if err := cursor.All(ctx, &workflows); err != nil {
+		return nil, 0, err
+	}
+	if workflows == nil {
+		workflows = []model.Workflow{}
 	}
 	return workflows, total, nil
 }
 
-func (s *Store) UpdateWorkflow(id uint, updates map[string]any) error {
-	marshalJSONFields(updates, "nodes", "edges")
-	return s.db.Model(&model.Workflow{}).Where("id = ?", id).Updates(updates).Error
+func (s *Store) UpdateWorkflow(id bson.ObjectID, updates map[string]any) error {
+	updates["updated_at"] = time.Now()
+	_, err := s.workflows().UpdateByID(context.TODO(), id, bson.M{"$set": updates})
+	return err
 }
 
 func (s *Store) SaveWorkflow(w *model.Workflow) error {
-	return s.db.Save(w).Error
+	w.UpdatedAt = time.Now()
+	_, err := s.workflows().ReplaceOne(context.TODO(), bson.M{"_id": w.ID}, w)
+	return err
 }
 
-func (s *Store) DeleteWorkflow(id uint) error {
-	return s.db.Delete(&model.Workflow{}, id).Error
+func (s *Store) DeleteWorkflow(id bson.ObjectID) error {
+	_, err := s.workflows().DeleteOne(context.TODO(), bson.M{"_id": id})
+	return err
 }

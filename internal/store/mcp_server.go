@@ -1,54 +1,74 @@
 package store
 
 import (
+	"context"
+	"time"
+
 	"github.com/2comjie/mcpflow/internal/model"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func (s *Store) CreateMCPServer(srv *model.MCPServer) error {
-	return s.db.Create(srv).Error
+	now := time.Now()
+	srv.CreatedAt = now
+	srv.UpdatedAt = now
+	if srv.Status == "" {
+		srv.Status = "inactive"
+	}
+	result, err := s.mcpServers().InsertOne(context.TODO(), srv)
+	if err != nil {
+		return err
+	}
+	srv.ID = result.InsertedID.(bson.ObjectID)
+	return nil
 }
 
-func (s *Store) GetMCPServer(id uint) (*model.MCPServer, error) {
+func (s *Store) GetMCPServer(id bson.ObjectID) (*model.MCPServer, error) {
 	var srv model.MCPServer
-	if err := s.db.First(&srv, id).Error; err != nil {
+	err := s.mcpServers().FindOne(context.TODO(), bson.M{"_id": id}).Decode(&srv)
+	if err != nil {
 		return nil, err
 	}
 	return &srv, nil
 }
 
 func (s *Store) ListMCPServers() ([]model.MCPServer, error) {
-	var list []model.MCPServer
-	if err := s.db.Order("id DESC").Find(&list).Error; err != nil {
+	ctx := context.TODO()
+	opts := options.Find().SetSort(bson.M{"_id": -1})
+	cursor, err := s.mcpServers().Find(ctx, bson.M{}, opts)
+	if err != nil {
 		return nil, err
+	}
+
+	var list []model.MCPServer
+	if err := cursor.All(ctx, &list); err != nil {
+		return nil, err
+	}
+	if list == nil {
+		list = []model.MCPServer{}
 	}
 	return list, nil
 }
 
-func (s *Store) UpdateMCPServer(id uint, updates map[string]any) error {
-	marshalJSONFields(updates, "headers", "tools", "prompts", "resources")
-	return s.db.Model(&model.MCPServer{}).Where("id = ?", id).Updates(updates).Error
+func (s *Store) UpdateMCPServer(id bson.ObjectID, updates map[string]any) error {
+	updates["updated_at"] = time.Now()
+	_, err := s.mcpServers().UpdateByID(context.TODO(), id, bson.M{"$set": updates})
+	return err
 }
 
-func (s *Store) DeleteMCPServer(id uint) error {
-	return s.db.Delete(&model.MCPServer{}, id).Error
+func (s *Store) DeleteMCPServer(id bson.ObjectID) error {
+	_, err := s.mcpServers().DeleteOne(context.TODO(), bson.M{"_id": id})
+	return err
 }
 
-func (s *Store) UpdateMCPServerCache(id uint, updates map[string]any) error {
-	marshalJSONFields(updates, "tools", "prompts", "resources")
-	return s.db.Model(&model.MCPServer{}).Where("id = ?", id).
-		Select(keysOf(updates)).Updates(updates).Error
+func (s *Store) UpdateMCPServerCache(id bson.ObjectID, updates map[string]any) error {
+	_, err := s.mcpServers().UpdateByID(context.TODO(), id, bson.M{"$set": updates})
+	return err
 }
 
-func keysOf(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// UpdateMCPServerFull 用结构体整体更新
 func (s *Store) UpdateMCPServerFull(srv *model.MCPServer) error {
-	return s.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(srv).Error
+	srv.UpdatedAt = time.Now()
+	_, err := s.mcpServers().ReplaceOne(context.TODO(), bson.M{"_id": srv.ID}, srv)
+	return err
 }

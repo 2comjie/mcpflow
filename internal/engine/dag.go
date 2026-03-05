@@ -12,7 +12,7 @@ type dagGraph struct {
 	inEdges  map[string][]model.Edge // nodeID -> incoming edges
 }
 
-func buildGraph(nodes model.Nodes, edges model.Edges) (*dagGraph, error) {
+func buildGraph(nodes []model.Node, edges []model.Edge) (*dagGraph, error) {
 	g := &dagGraph{
 		nodes:    make(map[string]*model.Node, len(nodes)),
 		outEdges: make(map[string][]model.Edge),

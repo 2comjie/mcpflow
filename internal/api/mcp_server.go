@@ -2,11 +2,11 @@ package api
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/2comjie/mcpflow/internal/model"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func (a *API) CreateMCPServer(c *gin.Context) {
@@ -32,7 +32,7 @@ func (a *API) ListMCPServers(c *gin.Context) {
 }
 
 func (a *API) UpdateMCPServer(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
@@ -42,7 +42,7 @@ func (a *API) UpdateMCPServer(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	if err := a.store.UpdateMCPServer(uint(id), updates); err != nil {
+	if err := a.store.UpdateMCPServer(id, updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -50,12 +50,12 @@ func (a *API) UpdateMCPServer(c *gin.Context) {
 }
 
 func (a *API) DeleteMCPServer(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	if err := a.store.DeleteMCPServer(uint(id)); err != nil {
+	if err := a.store.DeleteMCPServer(id); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -63,13 +63,13 @@ func (a *API) DeleteMCPServer(c *gin.Context) {
 }
 
 func (a *API) TestMCPServer(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	srv, err := a.store.GetMCPServer(uint(id))
+	srv, err := a.store.GetMCPServer(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
@@ -77,7 +77,6 @@ func (a *API) TestMCPServer(c *gin.Context) {
 
 	headers := srv.GetHeadersMap()
 
-	// 测试连接
 	if _, err := a.mcp.TestConnection(c.Request.Context(), srv.URL, headers); err != nil {
 		now := time.Now()
 		a.store.UpdateMCPServerCache(srv.ID, map[string]any{"status": "inactive", "checked_at": now})
@@ -85,7 +84,6 @@ func (a *API) TestMCPServer(c *gin.Context) {
 		return
 	}
 
-	// 获取能力列表并缓存
 	tools, _ := a.mcp.ListTools(c.Request.Context(), srv.URL, headers)
 	prompts, _ := a.mcp.ListPrompts(c.Request.Context(), srv.URL, headers)
 	resources, _ := a.mcp.ListResources(c.Request.Context(), srv.URL, headers)
@@ -109,13 +107,13 @@ func (a *API) TestMCPServer(c *gin.Context) {
 }
 
 func (a *API) CallMCPTool(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
 
-	srv, err := a.store.GetMCPServer(uint(id))
+	srv, err := a.store.GetMCPServer(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
@@ -147,19 +145,18 @@ func (a *API) CallMCPTool(c *gin.Context) {
 }
 
 func (a *API) GetMCPServerTools(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	srv, err := a.store.GetMCPServer(uint(id))
+	srv, err := a.store.GetMCPServer(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
 	}
 
-	// 优先返回缓存
-	if !srv.Tools.IsEmpty() {
+	if srv.Tools != nil {
 		c.JSON(http.StatusOK, srv.Tools)
 		return
 	}
@@ -175,18 +172,18 @@ func (a *API) GetMCPServerTools(c *gin.Context) {
 }
 
 func (a *API) GetMCPServerPrompts(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	srv, err := a.store.GetMCPServer(uint(id))
+	srv, err := a.store.GetMCPServer(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
 	}
 
-	if !srv.Prompts.IsEmpty() {
+	if srv.Prompts != nil {
 		c.JSON(http.StatusOK, srv.Prompts)
 		return
 	}
@@ -202,18 +199,18 @@ func (a *API) GetMCPServerPrompts(c *gin.Context) {
 }
 
 func (a *API) GetMCPServerResources(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	id, err := bson.ObjectIDFromHex(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 		return
 	}
-	srv, err := a.store.GetMCPServer(uint(id))
+	srv, err := a.store.GetMCPServer(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "server not found"})
 		return
 	}
 
-	if !srv.Resources.IsEmpty() {
+	if srv.Resources != nil {
 		c.JSON(http.StatusOK, srv.Resources)
 		return
 	}

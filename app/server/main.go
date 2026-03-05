@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/2comjie/mcpflow/internal/api"
 	"github.com/2comjie/mcpflow/internal/config"
@@ -11,8 +15,8 @@ import (
 	"github.com/2comjie/mcpflow/internal/mcp"
 	"github.com/2comjie/mcpflow/internal/store"
 	"github.com/gin-gonic/gin"
-	"gorm.io/driver/mysql"
-	"gorm.io/gorm"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func main() {
@@ -26,15 +30,14 @@ func main() {
 		log.Fatalf("load config: %v", err)
 	}
 
-	db, err := gorm.Open(mysql.Open(cfg.Database.DSN()), &gorm.Config{})
+	client, err := mongo.Connect(options.Client().ApplyURI(cfg.Database.URI))
 	if err != nil {
-		log.Fatalf("connect database: %v", err)
+		log.Fatalf("connect mongodb: %v", err)
 	}
+	defer client.Disconnect(context.TODO())
 
+	db := client.Database(cfg.Database.Name)
 	s := store.New(db)
-	if err := s.AutoMigrate(); err != nil {
-		log.Fatalf("auto migrate: %v", err)
-	}
 
 	mcpClient := mcp.NewClient()
 	registry := engine.NewExecutorRegistry(mcpClient)
@@ -44,6 +47,22 @@ func main() {
 
 	r := gin.Default()
 	app.RegisterRoutes(r.Group("/api/v1"))
+
+	// 静态文件服务（生产模式：前端构建产物在 web/dist）
+	webDist := "web/dist"
+	if _, err := os.Stat(webDist); err == nil {
+		r.Static("/assets", filepath.Join(webDist, "assets"))
+		r.StaticFile("/favicon.ico", filepath.Join(webDist, "favicon.ico"))
+		r.NoRoute(func(c *gin.Context) {
+			// API 路径返回 404 JSON
+			if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+				c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+				return
+			}
+			// 其余路径返回 index.html（SPA 路由）
+			c.File(filepath.Join(webDist, "index.html"))
+		})
+	}
 
 	addr := fmt.Sprintf(":%s", cfg.Server.Port)
 	log.Printf("server starting on %s", addr)
