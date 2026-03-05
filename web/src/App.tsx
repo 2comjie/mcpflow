@@ -1,35 +1,32 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ConfigProvider } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
+import AppLayout from './components/Layout';
+import Dashboard from './pages/dashboard/Dashboard';
+import WorkflowList from './pages/workflow/WorkflowList';
+import WorkflowEditor from './pages/workflow/WorkflowEditor';
+import ExecutionList from './pages/execution/ExecutionList';
+import ExecutionDetail from './pages/execution/ExecutionDetail';
+import MCPServerList from './pages/mcpserver/MCPServerList';
+import LLMProviderList from './pages/llmprovider/LLMProviderList';
 
-function App() {
-  const [count, setCount] = useState(0)
-
+export default function App() {
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+    <ConfigProvider locale={zhCN}>
+      <BrowserRouter>
+        <Routes>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/workflows" element={<WorkflowList />} />
+            <Route path="/workflows/:id" element={<WorkflowEditor />} />
+            <Route path="/executions" element={<ExecutionList />} />
+            <Route path="/executions/:id" element={<ExecutionDetail />} />
+            <Route path="/mcp-servers" element={<MCPServerList />} />
+            <Route path="/llm-providers" element={<LLMProviderList />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </ConfigProvider>
+  );
 }
-
-export default App
