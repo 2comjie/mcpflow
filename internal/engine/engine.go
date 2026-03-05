@@ -100,9 +100,14 @@ func (e *Engine) ExecuteWorkflow(wf *model.Workflow, input map[string]any) (*mod
 			Error:       state.Error,
 			Duration:    duration,
 		}
-		if steps, ok := output.(AgentResult); ok {
-			log.AgentSteps = steps.Steps
-			log.Output = map[string]any{"content": steps.Content}
+		if agentRes, ok := output.(AgentResult); ok {
+			log.AgentSteps = agentRes.Steps
+			log.Output = map[string]any{"content": agentRes.Content}
+			// Store as map so downstream nodes can access {{nodes.node_id.content}}
+			output = map[string]any{
+				"content":      agentRes.Content,
+				"agent_steps":  agentRes.Steps,
+			}
 		}
 		_ = e.store.CreateExecutionLog(log)
 
@@ -236,9 +241,13 @@ func (e *Engine) ExecuteWorkflowWithEvents(wf *model.Workflow, input map[string]
 			Error:       state.Error,
 			Duration:    duration,
 		}
-		if steps, ok := output.(AgentResult); ok {
-			log.AgentSteps = steps.Steps
-			log.Output = map[string]any{"content": steps.Content}
+		if agentRes, ok := output.(AgentResult); ok {
+			log.AgentSteps = agentRes.Steps
+			log.Output = map[string]any{"content": agentRes.Content}
+			output = map[string]any{
+				"content":      agentRes.Content,
+				"agent_steps":  agentRes.Steps,
+			}
 		}
 		_ = e.store.CreateExecutionLog(log)
 
