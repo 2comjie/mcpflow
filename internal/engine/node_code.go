@@ -32,7 +32,14 @@ func executeJS(code string, ctx *WorkflowContext) (any, error) {
 	defer timer.Stop()
 
 	// 注入上下文变量
-	_ = vm.Set("input", ctx.Input)
+	// input = 上一个节点的输出（更直觉），workflow_input = 工作流原始输入
+	prevOutput := getPreviousOutput(ctx)
+	if prevOutput != nil {
+		_ = vm.Set("input", prevOutput)
+	} else {
+		_ = vm.Set("input", ctx.Input)
+	}
+	_ = vm.Set("workflow_input", ctx.Input)
 	_ = vm.Set("nodes", ctx.NodeOutput)
 
 	// 注入 JSON 工具

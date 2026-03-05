@@ -306,15 +306,15 @@ export default function WorkflowEditor() {
     return (
       <>
         <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f0fdf4', borderRadius: 8, borderLeft: '3px solid #12b76a' }}>
-          定义工作流的输入参数，执行时会生成对应的表单。
+          Define input parameters for the workflow. A form will be generated at execution time.
         </div>
-        <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13 }}>输入参数</div>
+        <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 13 }}>Input Parameters</div>
         {inputDefs.map((def: any, idx: number) => (
           <div key={idx} style={{ marginBottom: 12, padding: '10px 12px', background: '#f9fafb', borderRadius: 8, border: '1px solid #eaecf0' }}>
             <Space direction="vertical" style={{ width: '100%' }} size={8}>
               <Space style={{ width: '100%' }}>
                 <Input
-                  placeholder="参数名"
+                  placeholder="Parameter name"
                   value={def.name}
                   onChange={(e) => updateInputDef(idx, 'name', e.target.value)}
                   style={{ width: 120, borderRadius: 6 }}
@@ -326,30 +326,30 @@ export default function WorkflowEditor() {
                   style={{ width: 100 }}
                   size="small"
                   options={[
-                    { value: 'string', label: '文本' },
-                    { value: 'number', label: '数字' },
-                    { value: 'boolean', label: '布尔' },
-                    { value: 'text', label: '长文本' },
+                    { value: 'string', label: 'String' },
+                    { value: 'number', label: 'Number' },
+                    { value: 'boolean', label: 'Boolean' },
+                    { value: 'text', label: 'Text' },
                   ]}
                 />
                 <Switch
                   size="small"
                   checked={def.required}
                   onChange={(v) => updateInputDef(idx, 'required', v)}
-                  checkedChildren="必填"
-                  unCheckedChildren="可选"
+                  checkedChildren="Req"
+                  unCheckedChildren="Opt"
                 />
                 <Button type="text" size="small" danger icon={<MinusCircleOutlined />} onClick={() => removeInputDef(idx)} />
               </Space>
               <Input
-                placeholder="参数描述（可选）"
+                placeholder="Description (optional)"
                 value={def.description}
                 onChange={(e) => updateInputDef(idx, 'description', e.target.value)}
                 style={{ borderRadius: 6 }}
                 size="small"
               />
               <Input
-                placeholder="默认值（可选）"
+                placeholder="Default value (optional)"
                 value={def.default}
                 onChange={(e) => updateInputDef(idx, 'default', e.target.value)}
                 style={{ borderRadius: 6 }}
@@ -359,7 +359,7 @@ export default function WorkflowEditor() {
           </div>
         ))}
         <Button type="dashed" onClick={addInputDef} block icon={<PlusOutlined />} style={{ borderRadius: 8 }}>
-          添加输入参数
+          Add Parameter
         </Button>
       </>
     )
@@ -382,7 +382,7 @@ export default function WorkflowEditor() {
     return (
       <>
         <div style={{ fontSize: 12, color: '#667085', marginBottom: 12, padding: '8px 12px', background: '#f5f3ff', borderRadius: 8, borderLeft: '3px solid #7c3aed' }}>
-          Agent 会自动从 MCP Server 发现工具，由 LLM 自主决定调用哪些工具。
+          Agent automatically discovers tools from MCP Servers and lets the LLM decide which tools to call.
         </div>
 
         <Divider style={{ margin: '8px 0', fontSize: 12, color: '#98a2b3' }}>LLM</Divider>
@@ -429,7 +429,7 @@ export default function WorkflowEditor() {
 
         <Form.Item label="MCP Servers" extra={
           <span style={{ fontSize: 11, color: '#8c8c8c' }}>
-            Agent 会自动发现所选服务器的所有工具
+            Agent will auto-discover all tools from selected servers
           </span>
         }>
           <Select
@@ -801,7 +801,7 @@ export default function WorkflowEditor() {
                       <Input
                         value={(selectedNode.data as any).config?.email?.subject}
                         onChange={(e) => updateNodeConfig('email.subject', e.target.value)}
-                        placeholder="支持模板变量 {{.content}}"
+                        placeholder="Supports template variables {{input.xxx}}"
                         style={{ borderRadius: 8 }}
                       />
                     </Form.Item>
@@ -821,7 +821,7 @@ export default function WorkflowEditor() {
                         value={(selectedNode.data as any).config?.email?.body}
                         onChange={(e) => updateNodeConfig('email.body', e.target.value)}
                         rows={8}
-                        placeholder={'<h1>执行结果</h1>\n<p>{{.content}}</p>'}
+                        placeholder={'<h1>Result</h1>\n<p>{{nodes.node_id.content}}</p>'}
                         style={{ borderRadius: 8, fontFamily: 'monospace', fontSize: 12 }}
                       />
                     </Form.Item>
@@ -832,8 +832,8 @@ export default function WorkflowEditor() {
                   <>
                     <Form.Item label="Expression" extra={
                       <span style={{ fontSize: 11, color: '#8c8c8c' }}>
-                        表达式基于上游节点输出求值，结果为 true 走 true 分支，否则走 false 分支。
-                        <br />示例: <code>temp &gt; 35</code>、<code>status == 'ok'</code>、<code>score &gt;= 80 &amp;&amp; level == 'A'</code>
+                        Expression is evaluated against upstream node output. If true, takes the true branch; otherwise the false branch.
+                        <br />Examples: <code>temp &gt; 35</code>, <code>status == 'ok'</code>, <code>score &gt;= 80 &amp;&amp; level == 'A'</code>
                       </span>
                     }>
                       <Input.TextArea

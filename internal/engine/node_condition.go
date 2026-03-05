@@ -17,6 +17,15 @@ func executeCondition(cfg *model.ConditionConfig, ctx *WorkflowContext) (any, er
 		"nodes": ctx.NodeOutput,
 	}
 
+	// Inject previous node's output fields as top-level variables
+	// so expressions like "score >= 80" work directly
+	prevOutput := getPreviousOutput(ctx)
+	if m, ok := prevOutput.(map[string]any); ok {
+		for k, v := range m {
+			env[k] = v
+		}
+	}
+
 	program, err := expr.Compile(cfg.Expression, expr.Env(env))
 	if err != nil {
 		return nil, fmt.Errorf("compile condition: %w", err)
