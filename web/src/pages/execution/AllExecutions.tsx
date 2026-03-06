@@ -243,7 +243,7 @@ export default function AllExecutions() {
                           {log.error}
                         </div>
                       )}
-                      {log.node_type === 'agent' && (log.agent_steps?.length > 0 || log.output?.agent_steps) ? (
+                      {log.node_type === 'agent' && ((log.agent_steps?.length ?? 0) > 0 || log.output?.agent_steps) ? (
                         <>
                           {log.output?.content && (
                             <div style={{ fontSize: 12, color: '#344054', marginTop: 4, padding: '4px 8px', background: '#f0fdf4', borderRadius: 4, border: '1px solid #bbf7d0' }}>
